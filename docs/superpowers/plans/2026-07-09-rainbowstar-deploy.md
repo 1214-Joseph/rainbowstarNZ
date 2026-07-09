@@ -24,7 +24,11 @@
 8. **回應分頁沿用中文命名**：`住宿申請`、`換宿申請`；標題列為 `時間` + 各欄中文標籤 + `資料檢查`。
 9. **秘密不入版控**：`ADMIN_PASSCODE`、`PHOTO_ROOT_FOLDER_ID` 存 Apps Script Script Properties；`notify_email` 存試算表 `settings` 分頁。三者皆不得出現在 repo 任何檔案。
 10. **前端設定單一改動點**：`site/index.html` 內僅有一行 `window.RAINBOWSTAR_CONFIG={WEBAPP_URL:"..."}`。交接換帳號時只改這行。
-11. **每個 Task 結束時必須 commit**，且 `npm test` 全綠。
+11. **每個 Task 結束時必須 commit**，且 `npm test` 全綠。各 Task 標示的測試數量僅供參考，**判準是「全部通過、無跳過」**，不是數字相符。
+12. **重複程式碼政策（已裁決，勿「修正」）**：
+    - `splitUrls` 在 `apps-script/lib.js`、`site/app.js`、`apps-script/Admin.html` **各一份，刻意保留**。三者分屬 Apps Script 全域、瀏覽器 `<script src>`、HtmlService inline 三種執行環境，無模組系統可共享。函式僅 12 行且三處各有測試涵蓋。**Reviewer 不應要求合併。**
+    - 換宿清單的 23 條中英文**只有一個真實來源**：`sheet-template/workexchange_lists.csv`。`site/app.js` 的 `DEFAULT_LISTS` 由 `scripts/build-defaults.js` 產生並入版控，**不得手動編輯**。
+    - Node 端的 CSV 讀取器只有一份：`scripts/csv.js`，由測試與產生器共用。
 
 ### 對 spec 的一處刻意偏離（已評估）
 
@@ -59,11 +63,16 @@ rainbowstar/
 ├── sheet-template/
 │   ├── settings.csv
 │   ├── rooms.csv
-│   └── workexchange_lists.csv
+│   └── workexchange_lists.csv        # 換宿清單的唯一真實來源
+├── scripts/
+│   ├── csv.js                        # Node 端唯一的 CSV 讀取器（測試 + 產生器共用）
+│   └── build-defaults.js             # 由 CSV 產生 app.js 的 DEFAULT_LISTS 區塊
 ├── tests/
 │   ├── lib.test.js                   # apps-script/lib.js
 │   ├── code.test.js                  # apps-script/Code.js（以假的 SpreadsheetApp 等注入）
-│   └── app.test.js                   # site/app.js 的純函式
+│   ├── app.test.js                   # site/app.js 的純函式
+│   ├── admin.test.js                 # Admin.html 的靜態授權檢查
+│   └── seed.test.js                  # 三份 CSV 的完整性
 └── HANDOFF.md                        # 部署 + 交接說明（取代舊 SETUP.md）
 ```
 
@@ -2286,6 +2295,7 @@ reordering silently drops any URL that is not already present."
 2. `contact_email` 與 `notify_email` 先填佔位地址，部署時（Task 22）改成真實信箱。
 
 **Files:**
+- Create: `scripts/csv.js`
 - Create: `sheet-template/settings.csv`
 - Create: `sheet-template/rooms.csv`
 - Create: `sheet-template/workexchange_lists.csv`
@@ -2293,24 +2303,22 @@ reordering silently drops any URL that is not already present."
 
 **Interfaces:**
 - Consumes: Task 5 的 `LIST_NAMES`；Task 9 的 `ROOM_COLUMNS`
-- Produces: 三份 CSV，欄位分別對應 §Task 6/9 定義的分頁結構
+- Produces:
+  - `scripts/csv.js` 匯出 `parseCsv(text): string[][]` 與 `readSheetCsv(name): string[][]`（讀 `sheet-template/<name>`）。**Node 端唯一的 CSV 讀取器**，測試與 Task 14 的產生器共用。
+  - 三份 CSV，欄位分別對應 Task 6/9 定義的分頁結構
 
 ---
 
-- [ ] **Step 1: 寫失敗的測試**
+- [ ] **Step 1: 建立共用的 CSV 讀取器**
 
-Create `tests/seed.test.js`:
+Create `scripts/csv.js`. 這是 Node 端唯一的 CSV 讀取器——測試與 `build-defaults.js` 都用它，避免同一支 parser 抄三遍。
 
 ```js
 'use strict';
-const test = require('node:test');
-const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const code = require('../apps-script/Code.js');
-const lib = require('../apps-script/lib.js');
 
-/** A minimal RFC-4180 reader: handles quoted fields, embedded commas and "" escapes. */
+/** A minimal RFC-4180 reader: quoted fields, embedded commas and "" escapes. */
 function parseCsv(text) {
   const rows = [];
   let row = [];
@@ -2332,7 +2340,34 @@ function parseCsv(text) {
   return rows.filter((r) => r.some((cell) => cell !== ''));
 }
 
-const readCsv = (name) => parseCsv(fs.readFileSync(path.join(__dirname, '..', 'sheet-template', name), 'utf8'));
+function readSheetCsv(name) {
+  return parseCsv(fs.readFileSync(path.join(__dirname, '..', 'sheet-template', name), 'utf8'));
+}
+
+module.exports = { parseCsv, readSheetCsv };
+```
+
+- [ ] **Step 2: 寫失敗的測試**
+
+Create `tests/seed.test.js`:
+
+```js
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const code = require('../apps-script/Code.js');
+const lib = require('../apps-script/lib.js');
+const { readSheetCsv } = require('../scripts/csv.js');
+
+const readCsv = readSheetCsv;
+
+test('parseCsv keeps a comma that sits inside a quoted field', () => {
+  const { parseCsv } = require('../scripts/csv.js');
+  assert.deepEqual(parseCsv('a,"b,c"\n'), [['a', 'b,c']]);
+  assert.deepEqual(parseCsv('a,"say ""hi"""\n'), [['a', 'say "hi"']]);
+});
 
 test('settings.csv has a key/value header and no duplicate keys', () => {
   const rows = readCsv('settings.csv');
@@ -2426,12 +2461,12 @@ test('groupLists round-trips the seeded CSV into the shape the site consumes', (
 });
 ```
 
-- [ ] **Step 2: 執行測試，確認它失敗**
+- [ ] **Step 3: 執行測試，確認它失敗**
 
 Run: `npm test`
 Expected: FAIL — `ENOENT: no such file or directory, open '.../sheet-template/settings.csv'`
 
-- [ ] **Step 3: 建立 `sheet-template/settings.csv`**
+- [ ] **Step 4: 建立 `sheet-template/settings.csv`**
 
 ```csv
 key,value
@@ -2465,7 +2500,7 @@ scenery3_photos,
 
 > `site_name` 不需要 `_en` 列：站名中英同體。`contact_line` 與 `contact_email` 亦無需翻譯。
 
-- [ ] **Step 4: 建立 `sheet-template/rooms.csv`**
+- [ ] **Step 5: 建立 `sheet-template/rooms.csv`**
 
 `price` 留空，公開站會顯示「—」，由業者在後台填入實際房價。`note` 留空，避免把「請填實際房價」這類內部提示印在公開網頁上。
 
@@ -2476,7 +2511,7 @@ name,name_en,description,description_en,price,unit,unit_en,note,note_en,photos
 "露宿自己的愛車 vehicle","Sleep in your own vehicle","睡自己的車，室內提供廁所、浴室、廚房使用。","Sleep in your own vehicle; indoor toilet, bathroom and kitchen are available to use.",,"/ 晚","/ night",,,
 ```
 
-- [ ] **Step 5: 建立 `sheet-template/workexchange_lists.csv`**
+- [ ] **Step 6: 建立 `sheet-template/workexchange_lists.csv`**
 
 ```csv
 list,order,text_zh,text_en
@@ -2505,15 +2540,15 @@ duties_in,1,"房屋內外清潔（房間、走廊、廁所、衛浴、客廳、�
 duties_in,2,"維持公共區域的整潔","Keeping shared areas tidy"
 ```
 
-- [ ] **Step 6: 執行測試，確認它通過**
+- [ ] **Step 7: 執行測試，確認它通過**
 
 Run: `npm test`
-Expected: PASS — 96 tests passing
+Expected: PASS — 98 tests passing
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add sheet-template/ tests/seed.test.js
+git add scripts/csv.js sheet-template/ tests/seed.test.js
 git commit -m "Seed the content spreadsheet from the design file
 
 The seeded rules, duties and copy are transcribed from the design file, which
@@ -3005,13 +3040,16 @@ visitor switched language. A missing _en value now leaves the element alone."
 設計稿的 `renderList`（`dc.html:533-558`）以 `dataset.done==='1'` 早退，只能畫一次。內容改為後端驅動後，必須能重畫（資料抵達時、語言切換時）。
 
 **Files:**
+- Create: `scripts/build-defaults.js`
+- Modify: `package.json`（新增 `build:defaults` script）
 - Modify: `site/app.js`
 - Modify: `tests/app.test.js`
 
 **Interfaces:**
-- Consumes: Task 13 的 `state`、`pickRow`、`escapeHtml`
+- Consumes: Task 13 的 `state`、`pickRow`、`escapeHtml`；Task 11 的 `scripts/csv.js`
 - Produces:
-  - `Rainbowstar.DEFAULT_LISTS: {rules: Item[], duties_out: Item[], duties_in: Item[]}` — `Item = {zh, en}`
+  - `scripts/build-defaults.js` — 由 `sheet-template/workexchange_lists.csv` 產生 `site/app.js` 內標記區塊中的 `DEFAULT_LISTS`。`--check` 模式在 `app.js` 過期時以非零碼結束。
+  - `Rainbowstar.DEFAULT_LISTS: {rules: Item[], duties_out: Item[], duties_in: Item[]}` — `Item = {zh, en}`，**由產生器寫入，不得手動編輯**
   - `Rainbowstar.listItemsFor(data, listName): Item[]` — 後端有資料用後端的，否則用 `DEFAULT_LISTS`
   - `Rainbowstar.renderList(host, items, kind, lang): void` — `kind` 為 `'rule' | 'out' | 'in'`；**冪等**，每次先清空
   - `Rainbowstar.applyLang(): void`
@@ -3024,34 +3062,29 @@ visitor switched language. A missing _en value now leaves the element alone."
 Append to `tests/app.test.js`:
 
 ```js
-const fs = require('node:fs');
+const { execFileSync } = require('node:child_process');
 const path = require('node:path');
+const { readSheetCsv } = require('../scripts/csv.js');
 
 /** Reads the seeded CSV so the front-end fallback cannot drift away from it. */
 function seededLists() {
-  const text = fs.readFileSync(path.join(__dirname, '..', 'sheet-template', 'workexchange_lists.csv'), 'utf8');
-  const rows = [];
-  let row = [], field = '', inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (ch === '"') inQuotes = false;
-      else field += ch;
-    } else if (ch === '"') inQuotes = true;
-    else if (ch === ',') { row.push(field); field = ''; }
-    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-    else if (ch !== '\r') field += ch;
-  }
-  if (field !== '' || row.length) { row.push(field); rows.push(row); }
-
   const lists = { rules: [], duties_out: [], duties_in: [] };
-  rows.slice(1).filter((r) => r[0] in lists).forEach((r) => lists[r[0]].push({ zh: r[2], en: r[3] }));
+  readSheetCsv('workexchange_lists.csv').slice(1)
+    .filter((r) => r[0] in lists)
+    .forEach((r) => lists[r[0]].push({ zh: r[2], en: r[3] }));
   return lists;
 }
 
 test('DEFAULT_LISTS is byte-for-byte the seeded CSV content', () => {
   assert.deepEqual(app.DEFAULT_LISTS, seededLists());
+});
+
+test('site/app.js is not stale with respect to the seed CSV', () => {
+  const script = path.join(__dirname, '..', 'scripts', 'build-defaults.js');
+  assert.doesNotThrow(
+    () => execFileSync(process.execPath, [script, '--check'], { stdio: 'pipe' }),
+    'run: npm run build:defaults'
+  );
 });
 
 test('listItemsFor prefers back-end data and falls back to the built-in defaults', () => {
@@ -3137,34 +3170,107 @@ test('renderList tolerates an empty item list', () => {
 Run: `npm test`
 Expected: FAIL — `app.DEFAULT_LISTS is undefined`
 
-- [ ] **Step 3: 寫 `DEFAULT_LISTS`**
+- [ ] **Step 3: 在 `site/app.js` 放入產生器的標記區塊**
 
-在 `site/app.js` 的 IIFE 內加入 `DEFAULT_LISTS`。**逐字轉錄 `sheet-template/workexchange_lists.csv`**：16 條 `rules`、5 項 `duties_out`、2 項 `duties_in`，**順序與文字完全一致**（`text_zh` → `zh`，`text_en` → `en`，捨棄 `order` 欄，改由陣列順序表示）。
-
-> 全部 23 條的逐字中英文內容，就在本計畫 **Task 11 Step 5** 的 CSV 區塊裡；直接對照該處轉錄即可，不需另外查閱設計稿。
-
-Step 1 的 `DEFAULT_LISTS is byte-for-byte the seeded CSV content` 測試會直接比對兩者，任何一個字元不同都會失敗——這就是防止抄寫漂移的閘門，不要跳過。
-
-結構如下（前兩條為範例，其餘 21 條照抄 CSV）：
+`DEFAULT_LISTS` **不手抄**。在 `site/app.js` 的 IIFE 內，`listItemsFor` 之前，放入這兩行標記與一個空殼；下一步的產生器會把它填滿：
 
 ```js
-  var DEFAULT_LISTS = {
-    rules: [
-      { zh: '換宿時間：換宿期間至少兩星期，每天工作 3 小時（有一定的工作量），工作時間為早上 10:00 到中午 13:00；若有特殊情況時間會調整，工作量較多時會增加時數，擇日補休。',
-        en: 'Duration: a minimum of 2 weeks, 3 hours of work per day (with a set workload), from 10:00 to 13:00. Hours may be adjusted for special situations; if the workload is heavier, extra hours are added and made up with time off another day.' },
-      { zh: '休假：做五休二。', en: 'Days off: five days on, two days off.' }
-      // …CSV 的 rules 第 3–16 條
-    ],
-    duties_out: [
-      // …CSV 的 duties_out 第 1–5 項
-    ],
-    duties_in: [
-      // …CSV 的 duties_in 第 1–2 項
-    ]
-  };
+  // <default-lists:begin> generated by scripts/build-defaults.js — do not edit by hand
+  var DEFAULT_LISTS = { rules: [], duties_out: [], duties_in: [] };
+  // <default-lists:end>
 ```
 
-- [ ] **Step 4: 寫其餘實作**
+- [ ] **Step 4: 寫產生器**
+
+Create `scripts/build-defaults.js`:
+
+```js
+'use strict';
+/**
+ * Regenerates the DEFAULT_LISTS block in site/app.js from the seeded CSV.
+ *
+ * The public page needs the work-exchange lists before the back end answers,
+ * and the spreadsheet is seeded from the same CSV, so the two must agree.
+ * Generating one from the other removes the chance of a transcription slip.
+ *
+ *   node scripts/build-defaults.js           rewrite site/app.js
+ *   node scripts/build-defaults.js --check   exit 1 if site/app.js is stale
+ */
+const fs = require('node:fs');
+const path = require('node:path');
+const { readSheetCsv } = require('./csv.js');
+
+const APP_PATH = path.join(__dirname, '..', 'site', 'app.js');
+const BEGIN = '  // <default-lists:begin> generated by scripts/build-defaults.js — do not edit by hand';
+const END = '  // <default-lists:end>';
+const LIST_NAMES = ['rules', 'duties_out', 'duties_in'];
+
+function listsFromCsv() {
+  const lists = { rules: [], duties_out: [], duties_in: [] };
+  readSheetCsv('workexchange_lists.csv').slice(1).forEach((row) => {
+    if (LIST_NAMES.includes(row[0])) lists[row[0]].push({ zh: row[2], en: row[3] });
+  });
+  return lists;
+}
+
+function render(lists) {
+  const body = LIST_NAMES.map((name) => {
+    const items = lists[name]
+      .map((item) => `      { zh: ${JSON.stringify(item.zh)}, en: ${JSON.stringify(item.en)} }`)
+      .join(',\n');
+    return `    ${name}: [\n${items}\n    ]`;
+  }).join(',\n');
+
+  return `${BEGIN}\n  var DEFAULT_LISTS = {\n${body}\n  };\n${END}`;
+}
+
+function main() {
+  const current = fs.readFileSync(APP_PATH, 'utf8');
+  const start = current.indexOf(BEGIN);
+  const end = current.indexOf(END);
+  if (start < 0 || end < 0) {
+    console.error('site/app.js is missing the default-lists markers');
+    process.exit(1);
+  }
+
+  const updated = current.slice(0, start) + render(listsFromCsv()) + current.slice(end + END.length);
+
+  if (process.argv.includes('--check')) {
+    if (updated !== current) {
+      console.error('site/app.js is stale. Run: npm run build:defaults');
+      process.exit(1);
+    }
+    console.log('site/app.js DEFAULT_LISTS is up to date');
+    return;
+  }
+
+  fs.writeFileSync(APP_PATH, updated);
+  console.log('Regenerated DEFAULT_LISTS in site/app.js');
+}
+
+main();
+```
+
+Add the script to `package.json`:
+
+```json
+  "scripts": {
+    "test": "node --test tests/",
+    "build:defaults": "node scripts/build-defaults.js"
+  }
+```
+
+- [ ] **Step 5: 產生 `DEFAULT_LISTS` 並確認內容**
+
+Run: `npm run build:defaults`
+Expected: `Regenerated DEFAULT_LISTS in site/app.js`
+
+Run: `node -e "console.log(require('./site/app.js').DEFAULT_LISTS.rules.length, require('./site/app.js').DEFAULT_LISTS.duties_out.length, require('./site/app.js').DEFAULT_LISTS.duties_in.length)"`
+Expected: `16 5 2`
+
+> 之後只要改了 `sheet-template/workexchange_lists.csv`，就必須重跑 `npm run build:defaults`。`npm test` 內的 `--check` 會擋下忘記重跑的情況。
+
+- [ ] **Step 6: 寫其餘實作**
 
 Add to `site/app.js`, inside the IIFE:
 
@@ -3314,12 +3420,12 @@ Then wire them up in `boot()`:
   }
 ```
 
-- [ ] **Step 5: 執行測試，確認它通過**
+- [ ] **Step 7: 執行測試，確認它通過**
 
 Run: `npm test`
-Expected: PASS — 115 tests passing。若 `DEFAULT_LISTS is byte-for-byte the seeded CSV content` 失敗，比對 assertion 印出的差異並修正轉錄，**不要**改測試。
+Expected: 全部通過。若 `DEFAULT_LISTS is byte-for-byte the seeded CSV content` 或 `site/app.js is not stale` 失敗，跑 `npm run build:defaults` 再測一次，**不要**改測試。
 
-- [ ] **Step 6: 在瀏覽器驗證**
+- [ ] **Step 8: 在瀏覽器驗證**
 
 1. `browser_navigate` 至 `file:///c:/Users/wuuu1/Desktop/rainbowstar/site/index.html`
 2. `browser_snapshot` — Expected: 換宿章則區出現 16 條、編號 1–16；戶外工作 5 項、室內工作 2 項。
@@ -3327,10 +3433,10 @@ Expected: PASS — 115 tests passing。若 `DEFAULT_LISTS is byte-for-byte the s
 4. `browser_click` 再切回中文，`browser_snapshot` — Expected: 章則仍是 16 條（**不是 32 條**）。這條驗證 `renderList` 的冪等性。
 5. `browser_resize` 至寬度 400，`browser_snapshot` — Expected: 漢堡鈕出現、導覽收合。
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add site/app.js tests/app.test.js
+git add scripts/build-defaults.js package.json site/app.js tests/app.test.js
 git commit -m "Render the work-exchange lists from data, re-runnably
 
 The design's list renderer early-returned on a dataset.done guard, so it drew
