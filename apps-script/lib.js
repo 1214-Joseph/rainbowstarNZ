@@ -118,6 +118,66 @@ function buildResponseRow(fields, get, timestamp, flag) {
   return [timestamp].concat(fields.map(function (f) { return get(f[0]); })).concat([flag]);
 }
 
+function isRepeatedChars_(value) {
+  return /^(.)\1+$/.test(value);
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+/**
+ * A backstop for obviously fake submissions. It only ever annotates; it must
+ * never cause a submission to be rejected, because the visitor may not be able
+ * to read our response (see Global Constraint 6).
+ */
+function checkSuspicious(get) {
+  var notes = [];
+
+  var rawPhone = String(get('phone') || '').trim();
+  if (rawPhone && rawPhone.replace(/[^0-9]/g, '').length < 6) notes.push('電話可疑');
+
+  var nameEn = String(get('name_en') || '').trim();
+  if (nameEn && (isRepeatedChars_(nameEn) || nameEn.length < 2)) notes.push('英文姓名可疑');
+
+  var nameZh = String(get('name_zh') || '').trim();
+  if (nameZh && isRepeatedChars_(nameZh)) notes.push('中文姓名可疑');
+
+  var email = String(get('email') || '').trim();
+  if (email && !isValidEmail(email)) notes.push('Email可疑');
+
+  var address = String(get('address') || '').trim();
+  if (address && (isRepeatedChars_(address) || address.length < 4)) notes.push('地址可疑');
+
+  return notes.length ? '⚠️ ' + notes.join('、') : '';
+}
+
+function typeLabel_(type) {
+  return type === 'workexchange' ? '換宿申請 Work Exchange' : '住宿申請 Accommodation';
+}
+
+function applicantName_(get) {
+  return get('name_zh') || get('name_en') || get('email') || '(未具名)';
+}
+
+function buildEmailSubject(type, get, flag) {
+  var suffix = flag ? '（' + flag + '）' : '';
+  return '【彩虹星民宿】新' + typeLabel_(type) + ' - ' + applicantName_(get) + suffix;
+}
+
+function buildEmailBody(type, fields, get, flag) {
+  var lines = ['你收到一筆新的' + typeLabel_(type) + '：', ''];
+  if (flag) {
+    lines.push('⚠️ 系統提醒：' + flag + '（此筆資料可能為測試或亂填，請留意）', '');
+  }
+  fields.forEach(function (field) {
+    var value = get(field[0]);
+    if (!isBlank_(value)) lines.push(field[1] + '： ' + value);
+  });
+  lines.push('', '— 這封信由民宿網站自動寄出 —');
+  return lines.join('\n');
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     splitUrls: splitUrls,
@@ -129,6 +189,10 @@ if (typeof module !== 'undefined' && module.exports) {
     joinMultiValue: joinMultiValue,
     buildHeaderRow: buildHeaderRow,
     headerNeedsUpdate: headerNeedsUpdate,
-    buildResponseRow: buildResponseRow
+    buildResponseRow: buildResponseRow,
+    checkSuspicious: checkSuspicious,
+    isValidEmail: isValidEmail,
+    buildEmailSubject: buildEmailSubject,
+    buildEmailBody: buildEmailBody
   };
 }

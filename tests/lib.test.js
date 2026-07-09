@@ -126,3 +126,76 @@ test('buildResponseRow has exactly the width of buildHeaderRow', () => {
   const row = lib.buildResponseRow(lib.ACCOM_FIELDS, () => '', stamp, '');
   assert.equal(row.length, lib.buildHeaderRow(lib.ACCOM_FIELDS).length);
 });
+
+const getter = (obj) => (key) => (obj[key] === undefined ? '' : obj[key]);
+
+test('checkSuspicious passes clean data', () => {
+  assert.equal(checkClean(), '');
+  function checkClean() {
+    return lib.checkSuspicious(getter({
+      name_en: 'Mei Wang', name_zh: '王美', phone: '0211234567',
+      email: 'mei@example.com', address: '123 Main Street'
+    }));
+  }
+});
+
+test('checkSuspicious flags a phone with fewer than six digits', () => {
+  assert.match(lib.checkSuspicious(getter({ phone: '123' })), /電話可疑/);
+});
+
+test('checkSuspicious ignores an empty phone rather than flagging it', () => {
+  assert.equal(lib.checkSuspicious(getter({ phone: '' })), '');
+});
+
+test('checkSuspicious flags repeated-character and too-short names', () => {
+  assert.match(lib.checkSuspicious(getter({ name_en: 'aaaa' })), /英文姓名可疑/);
+  assert.match(lib.checkSuspicious(getter({ name_en: 'a' })), /英文姓名可疑/);
+  assert.match(lib.checkSuspicious(getter({ name_zh: '啊啊啊' })), /中文姓名可疑/);
+});
+
+test('checkSuspicious flags a malformed email and a too-short address', () => {
+  assert.match(lib.checkSuspicious(getter({ email: 'not-an-email' })), /Email可疑/);
+  assert.match(lib.checkSuspicious(getter({ address: 'ab' })), /地址可疑/);
+});
+
+test('checkSuspicious joins several problems into one note', () => {
+  const flag = lib.checkSuspicious(getter({ phone: '1', email: 'bad' }));
+  assert.match(flag, /^⚠️ /);
+  assert.match(flag, /電話可疑/);
+  assert.match(flag, /Email可疑/);
+});
+
+test('isValidEmail accepts ordinary addresses and rejects malformed ones', () => {
+  assert.equal(lib.isValidEmail('a@b.co'), true);
+  assert.equal(lib.isValidEmail('a@b'), false);
+  assert.equal(lib.isValidEmail('a b@c.co'), false);
+  assert.equal(lib.isValidEmail(''), false);
+});
+
+test('buildEmailSubject names the application type and the applicant', () => {
+  const subject = lib.buildEmailSubject('workexchange', getter({ name_zh: '王美' }), '');
+  assert.equal(subject, '【彩虹星民宿】新換宿申請 Work Exchange - 王美');
+});
+
+test('buildEmailSubject falls back through Chinese name, English name, then email', () => {
+  assert.match(lib.buildEmailSubject('accommodation', getter({ name_en: 'Mei' }), ''), /- Mei$/);
+  assert.match(lib.buildEmailSubject('accommodation', getter({ email: 'm@e.co' }), ''), /- m@e\.co$/);
+});
+
+test('buildEmailSubject appends the suspicious-data flag in parentheses', () => {
+  const subject = lib.buildEmailSubject('accommodation', getter({ name_zh: '王美' }), '⚠️ 電話可疑');
+  assert.match(subject, /（⚠️ 電話可疑）$/);
+});
+
+test('buildEmailBody lists only the fields that were filled in', () => {
+  const fields = [['a', '甲'], ['b', '乙'], ['c', '丙']];
+  const body = lib.buildEmailBody('accommodation', fields, getter({ a: 'A', c: 'C' }), '');
+  assert.match(body, /甲： A/);
+  assert.match(body, /丙： C/);
+  assert.doesNotMatch(body, /乙/);
+});
+
+test('buildEmailBody leads with a warning line when data looks suspicious', () => {
+  const body = lib.buildEmailBody('accommodation', [['a', '甲']], getter({ a: 'A' }), '⚠️ 電話可疑');
+  assert.match(body, /⚠️ 系統提醒：⚠️ 電話可疑/);
+});
