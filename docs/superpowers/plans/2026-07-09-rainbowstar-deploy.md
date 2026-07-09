@@ -30,15 +30,17 @@
 
 Spec §6.1 第 9 點只要求檔名為 `index.html`。本計畫將行為抽到**同源**的 `site/app.js`，而非全部內嵌。理由：內嵌的 JS 無法被 `node --test` 直接測試，而三個必修缺陷有兩個在前端邏輯裡。`app.js` 是同源靜態檔，**不違反** Spec §17 的驗收條件（「無 React / Babel / support.js 外部請求」）。Cloudflare Pages 與 GitHub Pages 皆原生支援。
 
-### ⚠️ 待業者確認的內容衝突（不阻塞實作）
+### 休假制度：做五休二（已確認，並須修補一處漏改）
 
-設計稿**自我矛盾**，實作時一律採「設計稿 `RULES` 陣列」版本並使兩處一致，但需業者最終確認：
+業者已將休假制度由「做六休一」改為「**做五休二**」，但當時**只改了設計稿的 `RULES` 陣列**（`dc.html:506`），同一份檔案的換宿數據卡（`dc.html:140`）沒有同步更新。
 
-| 項目 | 設計稿數據卡 (`dc.html:140`) | 設計稿 `RULES` 陣列 (`dc.html:506`) | 舊版 index.html | 本計畫採用 |
-|---|---|---|---|---|
-| 休假制度 | 做六休一 | **做五休二** | 做六休一 | **做五休二**（並將數據卡一併改為做五休二） |
+| 出處 | 內容 | 判定 |
+|---|---|---|
+| 設計稿 `RULES` 陣列 (`dc.html:506`) | **做五休二** | ✅ 正確，業者已更新 |
+| 設計稿數據卡 (`dc.html:140`) | 做六休一 | ❌ 漏改的殘留 |
+| 舊版 index.html (`:217`) | 做六休一 | ❌ 更早的版本 |
 
-實作後請把此列交給業者確認；因內容已 100% 後台可編輯，改回只需在後台點兩下。
+因此「做六休一」**不是**另一個版本的事實，而是一處未同步的舊值。本計畫全站統一為**做五休二**，並在 Task 12 修補數據卡。這不是待確認事項。
 
 ---
 
@@ -2778,7 +2780,7 @@ Expected: PASS — 105 tests passing
 
 **必要修改（唯一一處內容更動）：**
 
-dc.html 第 140 行的換宿數據卡寫「做六休一」，與同檔第 506 行 `RULES` 陣列的「做五休二」互相矛盾。依 Global Constraints 的決議，統一為「做五休二」：
+dc.html 第 140 行的換宿數據卡仍寫「做六休一」。業者早已改為「做五休二」，但當時只更新了同檔第 506 行的 `RULES` 陣列，數據卡漏改。補上：
 
 ```html
 <!-- 原本 -->
@@ -2812,9 +2814,10 @@ transpiled the page in the browser on every visit. None of that survives:
 the markup moves into a plain body and a thirty-line shim reproduces the
 style-hover and style-focus pseudo-attributes the runtime used to interpret.
 
-The work-exchange stat card said six days on, one off, while the rules array
-in the same file said five on, two off. Both now say five on, two off; the
-owner will confirm which is true and can correct it from the admin panel."
+The work-exchange stat card still said six days on, one off. The owner moved
+to five on, two off some time ago but the change only ever reached the rules
+array in the same file, so the stat card had been contradicting the rules it
+sits next to. Both now say five on, two off."
 ```
 
 ---
@@ -5392,8 +5395,9 @@ that matters most: the web app answers to anyone."
 - **帳號交接清單**（逐字引用 spec §12 的七個步驟）
 - Task 21 兩個決策的實際結果（引用 `2026-07-09-live-verification.md`）
 
-**待業者確認的內容爭議**
-- 休假制度：本專案採「做五休二」（設計稿 `RULES` 陣列），但設計稿的數據卡與舊版網站都寫「做六休一」。請業者確認；改動只需在後台編輯章則第 2 條，並請開發者同步修改 `index.html` 的數據卡。
+**一處已修補的舊值（供日後查考）**
+- 休假制度為「做五休二」。業者早年由「做六休一」改過來，但當時只改到設計稿的 `RULES` 陣列，換宿數據卡與更早的靜態站仍留著舊值。兩處皆已在 Task 12 統一。
+- 教訓：休假制度現在只存在於試算表的 `workexchange_lists`（章則第 2 條），但**數據卡的文字仍寫死在 `index.html`**。若業者日後再改休假制度，後台改得動章則、改不動數據卡。若這成為困擾，可把數據卡三張卡也納入 `settings` 鍵（`stat_1`…），屬未來加值。
 
 - [ ] **Step 4: 移除已被取代的舊說明**
 
