@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>彩虹星民宿 Rainbowstar Farmstay｜基督城 Christchurch</title>
+<meta name="description" content="Rainbowstar Farmstay in Christchurch, New Zealand — accommodation & work exchange. 紐西蘭基督城民宿，住宿與打工換宿線上申請。">
+<style>
+  :root{
+    --green:#2f6d4f; --green-dark:#234f3a; --sand:#f6f1e7; --cream:#fbf8f2;
+    --ink:#2b2b2b; --muted:#6b6b6b; --line:#e6ddcd; --white:#fff;
+    --accent:#e8714c; --radius:16px; --maxw:1080px;
+    --shadow:0 10px 30px rgba(0,0,0,.08);
+    --font:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:var(--font);color:var(--ink);background:var(--cream);line-height:1.7;font-size:17px}
+  img{max-width:100%;display:block}
+  a{color:var(--green-dark)}
+  h1,h2,h3{line-height:1.25;font-weight:700}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+  .rainbow{height:5px;background:linear-gradient(90deg,#e8714c,#f3b13b,#5aa469,#3f86c4,#7a5aa6)}
+
+  header.nav{position:sticky;top:0;z-index:50;background:rgba(251,248,242,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;gap:16px;height:64px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--green-dark);text-decoration:none;font-size:18px;margin-right:auto}
+  .brand .dot{width:22px;height:22px;border-radius:50%;background:conic-gradient(#e8714c,#f3b13b,#5aa469,#3f86c4,#7a5aa6,#e8714c);flex:none}
+  nav a{margin-left:20px;text-decoration:none;color:var(--ink);font-size:15px;font-weight:600}
+  nav a:hover{color:var(--accent)}
+  .nav-links{display:flex;align-items:center}
+  .nav-right{display:flex;align-items:center;gap:10px}
+  .lang-btn{border:1.5px solid var(--green);background:transparent;color:var(--green-dark);font-weight:800;font-size:13px;padding:6px 13px;border-radius:999px;cursor:pointer;letter-spacing:.03em}
+  .lang-btn:hover{background:var(--green);color:#fff}
+  .menu-btn{display:none;background:none;border:0;font-size:24px;cursor:pointer;color:var(--green-dark)}
+  @media(max-width:820px){
+    nav.nav-links{position:fixed;inset:64px 0 auto 0;flex-direction:column;align-items:flex-start;background:var(--cream);border-bottom:1px solid var(--line);padding:10px 22px;display:none}
+    nav.nav-links.open{display:flex}
+    nav a{margin:8px 0}
+    .menu-btn{display:block}
+  }
+
+  .hero{position:relative;color:#fff;text-align:center;padding:96px 22px 104px;overflow:hidden;
+    background:linear-gradient(180deg,rgba(35,79,58,.72),rgba(35,79,58,.78)),var(--hero-img,linear-gradient(135deg,#3a7d5b,#2f6d4f));
+    background-size:cover;background-position:center}
+  .hero h1{font-size:clamp(30px,5vw,52px);margin:0 0 14px;text-shadow:0 2px 18px rgba(0,0,0,.25)}
+  .hero p.sub{font-size:clamp(15px,2.4vw,20px);max-width:680px;margin:0 auto 26px;opacity:.96}
+  .hero .tags{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:30px}
+  .hero .tags span{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);padding:6px 14px;border-radius:999px;font-size:14px}
+  .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;padding:14px 30px;border-radius:999px;border:0;cursor:pointer;font-size:16px;transition:transform .15s,box-shadow .15s;box-shadow:var(--shadow)}
+  .btn:hover{transform:translateY(-2px)}
+  .btn.ghost{background:transparent;border:1.5px solid #fff;margin-left:10px}
+
+  section{padding:74px 0}
+  section:nth-child(even){background:var(--sand)}
+  .sec-head{text-align:center;max-width:760px;margin:0 auto 44px}
+  .sec-head h2{font-size:clamp(24px,3.6vw,34px);margin:0 0 12px;color:var(--green-dark)}
+  .sec-head p{color:var(--muted);margin:0;white-space:pre-line}
+  .kicker{display:inline-block;color:var(--accent);font-weight:800;letter-spacing:.12em;font-size:13px;text-transform:uppercase;margin-bottom:8px}
+
+  .grid{display:grid;gap:22px}
+  .grid.cols-3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:860px){.grid.cols-3{grid-template-columns:1fr}}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:26px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 8px;color:var(--green-dark);font-size:20px}
+  .card p{margin:0;color:var(--muted)}
+  .card .ico{font-size:30px;margin-bottom:8px}
+
+  #rooms-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+  .room{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .room .name{font-weight:800;color:var(--green-dark);font-size:19px;margin-bottom:6px}
+  .room .desc{color:var(--muted);font-size:15px;flex:1;margin-bottom:14px;white-space:pre-line}
+  .room .price{font-size:26px;font-weight:800;color:var(--accent)}
+  .room .price .unit{font-size:14px;color:var(--muted);font-weight:600}
+  .room .note{font-size:13px;color:var(--muted);margin-top:8px;border-top:1px dashed var(--line);padding-top:8px;white-space:pre-line}
+
+  .terms{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:28px 30px;box-shadow:var(--shadow);color:#3a3a3a}
+  .block-title{color:var(--green-dark);margin:0 0 14px;font-size:20px}
+  .rules-list{margin:0;padding-left:20px}
+  .rules-list li{margin-bottom:10px;color:#3a3a3a}
+  .jobs-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media(max-width:640px){.jobs-grid{grid-template-columns:1fr}}
+  .jobs-grid h4{color:var(--green-dark);margin:0 0 10px;font-size:17px}
+  .jobs-grid ul{margin:0;padding-left:20px}
+  .jobs-grid li{margin-bottom:8px;color:#3a3a3a}
+  .muted{color:var(--muted);font-size:14px;margin:0 0 16px}
+
+  .form-card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);max-width:760px;margin:0 auto;padding:30px}
+  .seg{display:flex;background:var(--sand);border-radius:999px;padding:5px;margin-bottom:8px}
+  .seg button{flex:1;border:0;background:transparent;padding:11px;border-radius:999px;font-weight:700;cursor:pointer;color:var(--muted);font-size:15px}
+  .seg button.active{background:var(--green);color:#fff;box-shadow:var(--shadow)}
+  .form-intro{text-align:center;color:var(--muted);font-size:14px;margin:6px 0 22px}
+  .q{margin-bottom:18px}
+  .q > .qlabel{display:block;font-weight:600;font-size:15px;margin-bottom:7px}
+  .q .req{color:var(--accent)}
+  .q .hint{display:block;font-size:13px;color:var(--muted);font-weight:400;margin-top:2px}
+  .q input[type=text],.q input[type=email],.q input[type=number],.q input[type=date],.q input[type=time],.q textarea,.q select{
+    width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:15px;background:#fff}
+  .q input:focus,.q textarea:focus,.q select:focus{outline:2px solid var(--green);border-color:transparent}
+  .opts{display:flex;flex-direction:column;gap:4px}
+  .opts.inline{flex-direction:row;gap:18px;flex-wrap:wrap}
+  .opts label{display:flex;align-items:flex-start;gap:9px;font-weight:400;font-size:15px;cursor:pointer;padding:3px 0}
+  .opts input{margin-top:5px;flex:none}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+  @media(max-width:560px){.row2,.row3{grid-template-columns:1fr}}
+  .secnum{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;background:var(--green);color:#fff;border-radius:50%;font-size:13px;font-weight:700;margin-right:8px}
+  fieldset.group{border:1px solid var(--line);border-radius:12px;padding:18px 18px 6px;margin:8px 0 18px;background:#fcfbf8}
+  fieldset.group legend{font-weight:700;color:var(--green-dark);padding:0 8px;font-size:15px}
+  .agree{background:var(--sand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .agree label{font-size:14px;display:flex;gap:9px;align-items:flex-start}
+  .agree input{margin-top:4px;flex:none}
+  .hidden{display:none}
+  .btn[disabled]{opacity:.6;cursor:not-allowed}
+  .invalid{border-color:#e8714c !important;outline:2px solid #f3c6b7}
+  .msg{padding:12px 16px;border-radius:10px;font-size:15px;display:none;margin-top:16px}
+  .msg.ok{display:block;background:#e9f5ee;color:#1d5e3c;border:1px solid #bfe2cd}
+  .msg.err{display:block;background:#fdece7;color:#a23a1e;border:1px solid #f3c6b7}
+
+  footer{background:var(--green-dark);color:#dfeee6;padding:44px 0 30px;text-align:center}
+  footer a{color:#fff}
+  footer .f-links{margin:10px 0 18px}
+  footer .f-links a{margin:0 12px;text-decoration:none}
+  .credit{font-size:12px;opacity:.6;margin-top:14px}
+  .loading-banner{background:#fff7e8;border:1px solid #f0dcab;color:#8a6d2f;text-align:center;font-size:13px;padding:8px;display:none}
+</style>
+</head>
+<body>
+
+<!-- ====== 設定區：部署後把 Apps Script 網址貼到下面 ====== -->
+<script>
+  window.RAINBOWSTAR_CONFIG = {
+    // 把 Google Apps Script 部署後得到的 /exec 網址貼在這裡（看 SETUP.md）
+    WEBAPP_URL: ""
+  };
+</script>
+
+<div class="rainbow"></div>
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top"><span class="dot"></span><span data-content="site_name">彩虹星民宿 Rainbowstar</span></a>
+    <nav class="nav-links" id="navlinks">
+      <a href="#about" onclick="closeMenu()" data-zh="關於我們" data-en="About">關於我們</a>
+      <a href="#stay" onclick="closeMenu()" data-zh="住宿" data-en="Stay">住宿</a>
+      <a href="#work" onclick="closeMenu()" data-zh="換宿" data-en="Work Exchange">換宿</a>
+      <a href="#apply" onclick="closeMenu()" data-zh="線上申請" data-en="Apply">線上申請</a>
+      <a href="#contact" onclick="closeMenu()" data-zh="聯絡" data-en="Contact">聯絡</a>
+    </nav>
+    <div class="nav-right">
+      <button id="langBtn" class="lang-btn" onclick="toggleLang()">EN</button>
+      <button class="menu-btn" aria-label="menu" onclick="document.getElementById('navlinks').classList.toggle('open')">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="loading-banner" id="loadingBanner" data-zh="正在載入最新資訊…" data-en="Loading latest info…">正在載入最新資訊…</div>
+
+<section class="hero" id="top" style="padding-top:104px">
+  <div class="wrap">
+    <h1 data-content="site_name">彩虹星民宿 Rainbowstar</h1>
+    <p class="sub" data-content="tagline" data-zh="歡迎來到彩虹星民宿 🌈" data-en="Welcome to Rainbowstar Farmstay in Christchurch, New Zealand 🌈">歡迎來到彩虹星民宿 🌈</p>
+    <div class="tags">
+      <span data-zh="🏡 基督城 Christchurch" data-en="🏡 Christchurch, NZ">🏡 基督城 Christchurch</span>
+      <span data-zh="🇹🇼 台灣人經營" data-en="🇹🇼 Taiwanese-run">🇹🇼 台灣人經營</span>
+      <span data-zh="🌱 打工換宿" data-en="🌱 Work Exchange">🌱 打工換宿</span>
+    </div>
+    <div>
+      <a class="btn" href="#apply" data-zh="線上申請" data-en="Apply Now">線上申請</a>
+      <a class="btn ghost" href="#stay" data-zh="看住宿" data-en="View Stay">看住宿</a>
+    </div>
+  </div>
+</section>
+
+<section id="about">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="kicker">About Us</span>
+      <h2 data-zh="關於我們" data-en="About Us">關於我們</h2>
+      <p data-content="intro_text" data-zh="彩虹星民宿（原十里香農場）位於紐西蘭基督城近郊，由台灣人經營。我們是一座真正的農莊——有花園、菜園、雞舍，還有貓咪與大狗作伴，以及浪漫的觀星小屋。無論你是來旅遊、打工度假，或想以打工換宿深入體驗紐西蘭的農場生活，都歡迎成為我們的家人。" data-en="Rainbowstar Farmstay (formerly Shilixiang Farm) sits just outside Christchurch, New Zealand, run by a Taiwanese family. We are a real working farm — with a flower garden, vegetable patch and chicken coop, friendly cats and big dogs, and a cozy stargazing cabin. Whether you are here to travel, on a working holiday, or want to experience New Zealand farm life through work exchange, you are warmly welcome to become part of our family.">彩虹星民宿（原十里香農場）位於紐西蘭基督城近郊，由台灣人經營。我們是一座真正的農莊——有花園、菜園、雞舍，還有貓咪與大狗作伴，以及浪漫的觀星小屋。無論你是來旅遊、打工度假，或想以打工換宿深入體驗紐西蘭的農場生活，都歡迎成為我們的家人。</p>
+    </div>
+    <div class="grid cols-3">
+      <div class="card"><div class="ico">🛏️</div><h3 data-zh="舒適住宿" data-en="Comfortable Stay">舒適住宿</h3><p data-content="feature_1" data-zh="乾淨溫馨的房間，適合短住與長住，走進門就像回到家。" data-en="Clean, cozy rooms for short or long stays — it feels just like home.">乾淨溫馨的房間，適合短住與長住，走進門就像回到家。</p></div>
+      <div class="card"><div class="ico">🤝</div><h3 data-zh="打工換宿" data-en="Work Exchange">打工換宿</h3><p data-content="feature_2" data-zh="用勞務換取住宿，深入體驗紐西蘭在地生活，認識來自各地的朋友。" data-en="Exchange a few hours of work for accommodation, experience local life, and meet friends from around the world.">用勞務換取住宿，深入體驗紐西蘭在地生活，認識來自各地的朋友。</p></div>
+      <div class="card"><div class="ico">🚌</div><h3 data-zh="生活便利" data-en="Convenient">生活便利</h3><p data-content="feature_3" data-zh="鄰近超市與巴士站，提供在地生活資訊，讓你快速安頓下來。" data-en="Close to supermarkets and bus stops, with local tips to help you settle in quickly.">鄰近超市與巴士站，提供在地生活資訊，讓你快速安頓下來。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="stay">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="kicker">Accommodation</span>
+      <h2 data-zh="住宿資訊" data-en="Accommodation">住宿資訊</h2>
+      <p data-content="accommodation_intro" data-zh="以下為房型與參考房價，實際空房與優惠請以線上申請後的回覆為準。" data-en="Room types and reference rates below. Actual availability and offers are confirmed after you apply online.">以下為房型與參考房價，實際空房與優惠請以線上申請後的回覆為準。</p>
+    </div>
+    <div id="rooms-list">
+      <div class="room"><div class="name">4人 Cabin 小屋</div><div class="desc">獨立小屋，適合朋友或家庭同行。</div><div class="price">$—<span class="unit"> / 晚</span></div></div>
+      <div class="room"><div class="name">2人觀星小屋 Stargazers</div><div class="desc">浪漫觀星，適合情侶。</div><div class="price">$—<span class="unit"> / 晚</span></div></div>
+      <div class="room"><div class="name">主屋 Dorm Room</div><div class="desc">經濟實惠床位，適合長住打工度假者。</div><div class="price">$—<span class="unit"> / 晚</span></div></div>
+    </div>
+    <p class="form-intro" data-content="booking_note" data-zh="＊房價可能依季節調整，請以申請後的回覆為準。" data-en="*Rates may vary by season; final price is confirmed after you apply.">＊房價可能依季節調整，請以申請後的回覆為準。</p>
+  </div>
+</section>
+
+<section id="work">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="kicker">Work Exchange</span>
+      <h2 data-zh="打工換宿" data-en="Work Exchange">打工換宿</h2>
+      <p data-content="workexchange_intro" data-zh="以勞務換取住宿，每天工作數小時即可換得免費住宿，是深入體驗紐西蘭農場生活、節省旅費的好方式。" data-en="Exchange a few hours of work each day for free accommodation — a great way to experience New Zealand farm life and save on travel costs.">以勞務換取住宿，每天工作數小時即可換得免費住宿，是深入體驗紐西蘭農場生活、節省旅費的好方式。</p>
+    </div>
+
+    <div class="terms">
+      <h3 class="block-title" data-zh="換宿章則（2012）" data-en="Work Exchange Rules (2012)">換宿章則（2012）</h3>
+      <ol class="rules-list">
+        <li data-zh="換宿時間：換宿期間至少兩星期，每天工作 3 小時（有一定的工作量），工作時間為早上 10:00 到中午 13:00；若有特殊情況時間會調整，工作量較多時會增加時數，擇日補休。" data-en="Duration: a minimum of 2 weeks, 3 hours of work per day (with a set workload), from 10:00 to 13:00. Hours may be adjusted for special situations; if the workload is heavier, extra hours are added and made up with time off another day.">換宿時間：換宿期間至少兩星期，每天工作 3 小時（有一定的工作量），工作時間為早上 10:00 到中午 13:00；若有特殊情況時間會調整，工作量較多時會增加時數，擇日補休。</li>
+        <li data-zh="休假：做六休一。（需與其他夥伴錯開輪休）" data-en="Days off: six days on, one day off (rotated so it does not overlap with other helpers).">休假：做六休一。（需與其他夥伴錯開輪休）</li>
+        <li data-zh="換宿志工來到農場第一天為住宿（須付費），這是為了讓志工調整好心情，為接下來的工作做準備。" data-en="Your first day at the farm is a paid stay, so you can settle in and prepare for the work ahead.">換宿志工來到農場第一天為住宿（須付費），這是為了讓志工調整好心情，為接下來的工作做準備。</li>
+        <li data-zh="換宿志工若臨時更改行程，請於七日前通知我們；因為行程更改我們也需要時間調度人員，請大家體諒與遵守。" data-en="If you change your schedule, please tell us at least 7 days in advance, as we need time to rearrange staffing. Thank you for understanding.">換宿志工若臨時更改行程，請於七日前通知我們；因為行程更改我們也需要時間調度人員，請大家體諒與遵守。</li>
+        <li data-zh="每位換宿志工都需一同維護公共區域的整潔，物品用完請歸回原位。" data-en="Every volunteer helps keep shared areas tidy; please return items to where you found them.">每位換宿志工都需一同維護公共區域的整潔，物品用完請歸回原位。</li>
+        <li data-zh="尊重他人隱私；非公用物品請勿使用。" data-en="Respect others' privacy; do not use items that are not communal.">尊重他人隱私；非公用物品請勿使用。</li>
+        <li data-zh="換宿志工若當天身體不適，請馬上通知我們。" data-en="If you feel unwell on a given day, please tell us immediately.">換宿志工若當天身體不適，請馬上通知我們。</li>
+        <li data-zh="對工作內容不清楚，或不確定工具的使用方式，請立即詢問，以免發生意外。" data-en="If you are unsure about a task or how to use a tool, ask right away to avoid accidents.">對工作內容不清楚，或不確定工具的使用方式，請立即詢問，以免發生意外。</li>
+        <li data-zh="工作時需注意個人安全；若因對工作內容不清楚、未經同意擅自使用工具、或不正確使用工具所導致的傷害，農場將不負任何責任。" data-en="Always mind your personal safety. The farm is not responsible for injuries caused by not understanding the task, using tools without our permission, or using tools incorrectly.">工作時需注意個人安全；若因對工作內容不清楚、未經同意擅自使用工具、或不正確使用工具所導致的傷害，農場將不負任何責任。</li>
+        <li data-zh="有任何問題請與我們當面溝通，勿請他人代為傳話，以免造成雙方誤解。" data-en="Please discuss any issues with us face to face; do not pass messages through others, to avoid misunderstandings.">有任何問題請與我們當面溝通，勿請他人代為傳話，以免造成雙方誤解。</li>
+        <li data-zh="維護農場安全，當日工具使用完後務必歸位；離開前詳細檢查是否有危險物品遺留（如鐵釘、鐵絲、鋤頭、工具）。" data-en="Keep the farm safe: always return tools after use, and check before leaving that no hazardous items are left behind (nails, wire, hoes, tools).">維護農場安全，當日工具使用完後務必歸位；離開前詳細檢查是否有危險物品遺留（如鐵釘、鐵絲、鋤頭、工具）。</li>
+        <li data-zh="最後清潔：離開前請整理好自己的地方（包括床鋪的換洗），請勿遺留任何私人物品與垃圾。" data-en="Final cleanup: before leaving, tidy your space (including washing bed linens) and do not leave any personal items or trash.">最後清潔：離開前請整理好自己的地方（包括床鋪的換洗），請勿遺留任何私人物品與垃圾。</li>
+        <li data-zh="換宿志工若因使用不當造成任何工具或物品的損壞，我們有權要求賠償；若對農場人員有任何不禮貌，我們將保留法律追訴權。" data-en="If improper use damages tools or property, we may ask for compensation; for any disrespect toward farm staff, we reserve the right to take legal action.">換宿志工若因使用不當造成任何工具或物品的損壞，我們有權要求賠償；若對農場人員有任何不禮貌，我們將保留法律追訴權。</li>
+        <li data-zh="若違反換宿章則與住宿生活公約，我們會口頭告知，屢勸不聽我們有權要求志工八小時內離開農場。" data-en="If you break the rules or house guidelines, we will give a verbal warning; if ignored repeatedly, we may ask the volunteer to leave the farm within 8 hours.">若違反換宿章則與住宿生活公約，我們會口頭告知，屢勸不聽我們有權要求志工八小時內離開農場。</li>
+        <li data-zh="請詳讀換宿章則與工作內容，仔細衡量自己的狀況，確定自己可以勝任此工作，並同意且願意遵守我們的生活公約與工作內容，再進行報名。" data-en="Please read the rules and job content carefully, assess your own situation, make sure you can handle the work, and agree to follow our house guidelines and duties before applying.">請詳讀換宿章則與工作內容，仔細衡量自己的狀況，確定自己可以勝任此工作，並同意且願意遵守我們的生活公約與工作內容，再進行報名。</li>
+        <li data-zh="換宿志工入住時請提供護照影本一份；換宿工作需自備口罩與手套。" data-en="Please provide a copy of your passport on arrival; bring your own mask and gloves for the work.">換宿志工入住時請提供護照影本一份；換宿工作需自備口罩與手套。</li>
+      </ol>
+    </div>
+
+    <div class="terms" style="margin-top:22px">
+      <h3 class="block-title" data-zh="工作內容" data-en="Work / Duties">工作內容</h3>
+      <p class="muted" data-zh="我們的工作內容大致分為戶外與室內兩大區域；每個時期的工作都不相同，會依當時情況分配。以下為主要工作內容，但不以此為限。" data-en="Our work covers two main areas — outdoor and indoor. Tasks vary by season and are assigned based on the situation at the time. The list below covers the main duties but is not limited to these.">我們的工作內容大致分為戶外與室內兩大區域；每個時期的工作都不相同，會依當時情況分配。以下為主要工作內容，但不以此為限。</p>
+      <div class="jobs-grid">
+        <div>
+          <h4 data-zh="戶外工作" data-en="Outdoor">戶外工作</h4>
+          <ul>
+            <li data-zh="花園整理（種花、除草、修剪樹枝）" data-en="Garden care (planting flowers, weeding, pruning branches)">花園整理（種花、除草、修剪樹枝）</li>
+            <li data-zh="菜園整理（翻土、種菜、澆水、拔雜草）" data-en="Vegetable garden (tilling, planting, watering, weeding)">菜園整理（翻土、種菜、澆水、拔雜草）</li>
+            <li data-zh="餵雞、撿雞蛋、清理雞舍" data-en="Feeding chickens, collecting eggs, cleaning the coop">餵雞、撿雞蛋、清理雞舍</li>
+            <li data-zh="照顧貓咪與大型狗（清潔、餵食、散步）" data-en="Caring for cats and large dogs (cleaning, feeding, walking)">照顧貓咪與大型狗（清潔、餵食、散步）</li>
+            <li data-zh="農場建設" data-en="Farm construction">農場建設</li>
+            <li data-zh="每星期四將垃圾桶拉出，隔日再拉回。" data-en="Take the bins out every Thursday and bring them back the next day.">每星期四將垃圾桶拉出，隔日再拉回。</li>
+          </ul>
+        </div>
+        <div>
+          <h4 data-zh="室內工作" data-en="Indoor">室內工作</h4>
+          <ul>
+            <li data-zh="房屋內外清潔（房間、走廊、廁所、衛浴、客廳、餐廳、洗衣間、門口內外、庭院）" data-en="Cleaning inside and out (rooms, hallway, toilet, bathroom, living room, dining room, laundry, entrance, yard)">房屋內外清潔（房間、走廊、廁所、衛浴、客廳、餐廳、洗衣間、門口內外、庭院）</li>
+            <li data-zh="床單換洗（收折床單）" data-en="Changing and folding bed linens">床單換洗（收折床單）</li>
+            <li data-zh="觀星屋內外清潔（蜘蛛絲）" data-en="Cleaning the stargazing cabin inside and out (cobwebs)">觀星屋內外清潔（蜘蛛絲）</li>
+            <li data-zh="每星期五定時清理冰箱" data-en="Cleaning the fridge every Friday">每星期五定時清理冰箱</li>
+            <li data-zh="維持公共區域的整潔" data-en="Keeping shared areas tidy">維持公共區域的整潔</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== Apply / 線上申請 ====== -->
+<section id="apply">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="kicker">Apply Online</span>
+      <h2 data-zh="線上申請" data-en="Apply Online">線上申請</h2>
+      <p data-zh="請選擇申請類型並詳細填寫，我們會盡快與你聯絡。" data-en="Choose an application type and fill in the details. We'll get back to you soon.">請選擇申請類型並詳細填寫，我們會盡快與你聯絡。</p>
+    </div>
+
+    <div class="form-card">
+      <div class="seg" role="tablist">
+        <button type="button" id="seg-stay" class="active" onclick="setType('accommodation')" data-zh="🏡 住宿申請" data-en="🏡 Accommodation">🏡 住宿申請</button>
+        <button type="button" id="seg-work" onclick="setType('workexchange')" data-zh="🌱 換宿申請" data-en="🌱 Work Exchange">🌱 換宿申請</button>
+      </div>
+
+      <!-- ============ 住宿申請 ============ -->
+      <form id="formStay" class="appform">
+        <p class="form-intro" data-zh="線上住宿申請 Apply for Accommodation" data-en="Apply for Accommodation">線上住宿申請 Apply for Accommodation</p>
+        <input type="hidden" name="type" value="accommodation">
+
+        <div class="q"><label class="qlabel"><span class="secnum">1</span><span data-zh="英文姓名" data-en="English Name">英文姓名</span> <span class="req">*</span></label><input type="text" name="name_en" required></div>
+        <div class="q"><label class="qlabel"><span class="secnum">2</span><span data-zh="中文姓名" data-en="Chinese Name">中文姓名</span> <span class="req">*</span></label><input type="text" name="name_zh" required></div>
+        <div class="row2">
+          <div class="q"><label class="qlabel"><span class="secnum">3</span><span data-zh="出生日期" data-en="Date of Birth">出生日期</span> <span class="req">*</span></label><input type="date" name="birthday" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">4</span><span data-zh="性別" data-en="Gender">性別</span> <span class="req">*</span></label>
+            <div class="opts inline">
+              <label><input type="radio" name="gender" value="男性" required><span data-zh="男性" data-en="Male">男性</span></label>
+              <label><input type="radio" name="gender" value="女性"><span data-zh="女性" data-en="Female">女性</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="q"><label class="qlabel"><span class="secnum">5</span><span data-zh="國家" data-en="Country">國家</span> <span class="req">*</span></label><input type="text" name="country" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">6</span><span data-zh="Passport 號碼" data-en="Passport No.">Passport 號碼</span> <span class="req">*</span></label><input type="text" name="passport" required></div>
+        </div>
+        <div class="row2">
+          <div class="q"><label class="qlabel"><span class="secnum">7</span>E-mail <span class="req">*</span></label><input type="email" name="email" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">8</span><span data-zh="連絡電話" data-en="Phone">連絡電話</span> <span class="req">*</span></label><input type="text" name="phone" required></div>
+        </div>
+
+        <div class="q"><label class="qlabel"><span class="secnum">9</span><span data-zh="想預定的房型" data-en="Preferred Room Type">想預定的房型</span> <span class="req">*</span><span class="hint" data-zh="若選的房型已無床位，將由屋主自行安排。" data-en="If the chosen room is full, the host will arrange an alternative.">若選的房型已無床位，將由屋主自行安排。</span></label>
+          <div class="opts">
+            <label><input type="radio" name="room_type" value="4人Cabin小屋" required><span data-zh="4人 Cabin 小屋" data-en="4-person Cabin">4人 Cabin 小屋</span></label>
+            <label><input type="radio" name="room_type" value="2人觀星小屋 Stargazers"><span data-zh="2人觀星小屋 Stargazers" data-en="2-person Stargazers Cabin">2人觀星小屋 Stargazers</span></label>
+            <label><input type="radio" name="room_type" value="主屋 Dorm Room"><span data-zh="主屋 Dorm Room" data-en="Main House Dorm Room">主屋 Dorm Room</span></label>
+            <label><input type="radio" name="room_type" value="自搭帳棚 Tent"><span data-zh="自搭帳棚 Tent" data-en="Own Tent">自搭帳棚 Tent</span></label>
+            <label><input type="radio" name="room_type" value="露宿自己的愛車 vehicle"><span data-zh="露宿自己的愛車 vehicle" data-en="Sleep in your own vehicle">露宿自己的愛車 vehicle</span></label>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="q"><label class="qlabel"><span class="secnum">10</span><span data-zh="入住人數" data-en="Guests">入住人數</span> <span class="req">*</span></label><input type="number" name="guests" min="1" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">11</span><span data-zh="入住日期" data-en="Check-in">入住日期</span> <span class="req">*</span></label><input type="date" name="checkin" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">12</span><span data-zh="退房日期" data-en="Check-out">退房日期</span> <span class="req">*</span></label><input type="date" name="checkout" required></div>
+        </div>
+
+        <div class="q"><label class="qlabel"><span class="secnum">13</span><span data-zh="是否需加購下列服務？" data-en="Need any add-on services?">是否需加購下列服務？</span> <span class="req">*</span></label>
+          <div class="opts inline">
+            <label><input type="radio" name="need_addon" value="YES" required onchange="toggleAddon(true)">YES</label>
+            <label><input type="radio" name="need_addon" value="NO" onchange="toggleAddon(false)">NO</label>
+          </div>
+        </div>
+
+        <div class="q"><label class="qlabel"><span class="secnum">14</span><span data-zh="需要加購的項目（可複選，單位 NZD）" data-en="Add-on services (multiple choice, NZD)">需要加購的項目（可複選，單位 NZD）</span></label>
+          <div class="opts">
+            <label><input type="checkbox" name="addons" value="無"><span data-zh="無" data-en="None">無</span></label>
+            <label><input type="checkbox" name="addons" value="P1 接機 機場→RainbowStar NZD$20~$60"><span data-zh="P1 接機 機場 → RainbowStar　NZD$20~$60" data-en="P1 Airport pickup (Airport → RainbowStar)　NZD$20~$60">P1 接機 機場 → RainbowStar　NZD$20~$60</span></label>
+            <label><input type="checkbox" name="addons" value="P2 送機 RainbowStar→機場 NZD$20~$60"><span data-zh="P2 送機 RainbowStar → 機場　NZD$20~$60" data-en="P2 Airport drop-off (RainbowStar → Airport)　NZD$20~$60">P2 送機 RainbowStar → 機場　NZD$20~$60</span></label>
+            <label><input type="checkbox" name="addons" value="C1 市區接送 NZD$25~$60"><span data-zh="C1 市區接送　NZD$25~$60" data-en="C1 City transfer　NZD$25~$60">C1 市區接送　NZD$25~$60</span></label>
+            <label><input type="checkbox" name="addons" value="M1 加購早餐 NZD$10"><span data-zh="M1 加購早餐　NZD$10" data-en="M1 Breakfast　NZD$10">M1 加購早餐　NZD$10</span></label>
+            <label><input type="checkbox" name="addons" value="M2 加購午餐 NZD$12"><span data-zh="M2 加購午餐　NZD$12" data-en="M2 Lunch　NZD$12">M2 加購午餐　NZD$12</span></label>
+            <label><input type="checkbox" name="addons" value="M3 加購晚餐 NZD$15"><span data-zh="M3 加購晚餐　NZD$15" data-en="M3 Dinner　NZD$15">M3 加購晚餐　NZD$15</span></label>
+            <label><input type="checkbox" name="addons" value="T1 RainbowStar→Rolleston 站(免費一次)"><span data-zh="T1 RainbowStar → Rolleston 火車/巴士站（免費一次）" data-en="T1 RainbowStar → Rolleston station (free once)">T1 RainbowStar → Rolleston 火車/巴士站（免費一次）</span></label>
+            <label><input type="checkbox" name="addons" value="T2 Rolleston 站→RainbowStar(免費一次)"><span data-zh="T2 Rolleston 火車/巴士站 → RainbowStar（免費一次）" data-en="T2 Rolleston station → RainbowStar (free once)">T2 Rolleston 火車/巴士站 → RainbowStar（免費一次）</span></label>
+            <label><input type="checkbox" name="addons" value="T3 RainbowStar→Templeton(免費一次)"><span data-zh="T3 RainbowStar → Templeton（免費一次）" data-en="T3 RainbowStar → Templeton (free once)">T3 RainbowStar → Templeton（免費一次）</span></label>
+            <label><input type="checkbox" name="addons" value="T4 Templeton→RainbowStar(免費一次)"><span data-zh="T4 Templeton → RainbowStar（免費一次）" data-en="T4 Templeton → RainbowStar (free once)">T4 Templeton → RainbowStar（免費一次）</span></label>
+            <label><input type="checkbox" name="addons" value="S1 寄放行李 一件 NZD$2/day"><span data-zh="S1 寄放行李（一件 NZD$2 / day）" data-en="S1 Luggage storage (NZD$2 / item / day)">S1 寄放行李（一件 NZD$2 / day）</span></label>
+          </div>
+        </div>
+        <div class="q"><label class="qlabel" data-zh="備註（T1~T4 請填日期與時間）" data-en="Note (for T1~T4, fill date & time)">備註（T1~T4 請填日期與時間）</label><input type="text" name="addon_remark" data-ph-zh="例 2026/07/01, 14:30" data-ph-en="e.g. 2026/07/01, 14:30" placeholder="例 2026/07/01, 14:30"></div>
+
+        <div id="addonDetails" class="hidden">
+          <fieldset class="group">
+            <legend data-zh="接機 Christchurch Airport → RainbowStar" data-en="Airport Pickup (Airport → RainbowStar)">接機 Christchurch Airport → RainbowStar</legend>
+            <div class="row2">
+              <div class="q"><label class="qlabel" data-zh="國際 or 國內航線" data-en="International or Domestic">國際 or 國內航線</label><input type="text" name="pickup_route"></div>
+              <div class="q"><label class="qlabel" data-zh="搭乘的航空" data-en="Airline">搭乘的航空</label><input type="text" name="pickup_airline"></div>
+            </div>
+            <div class="row2">
+              <div class="q"><label class="qlabel" data-zh="出發地點" data-en="Departure City">出發地點</label><input type="text" name="pickup_from"></div>
+              <div class="q"><label class="qlabel" data-zh="班機號碼" data-en="Flight No.">班機號碼</label><input type="text" name="pickup_flight"></div>
+            </div>
+            <div class="row3">
+              <div class="q"><label class="qlabel" data-zh="抵達日期" data-en="Arrival Date">抵達日期</label><input type="date" name="pickup_date"></div>
+              <div class="q"><label class="qlabel" data-zh="抵達時間" data-en="Arrival Time">抵達時間</label><input type="text" name="pickup_time" data-ph-zh="例 14:30" data-ph-en="e.g. 14:30" placeholder="例 14:30"></div>
+              <div class="q"><label class="qlabel" data-zh="人數" data-en="Pax">人數</label><input type="number" name="pickup_pax" min="1"></div>
+            </div>
+          </fieldset>
+          <fieldset class="group">
+            <legend data-zh="送機 RainbowStar → Christchurch Airport" data-en="Airport Drop-off (RainbowStar → Airport)">送機 RainbowStar → Christchurch Airport</legend>
+            <div class="row2">
+              <div class="q"><label class="qlabel" data-zh="國際 or 國內航線" data-en="International or Domestic">國際 or 國內航線</label><input type="text" name="dropoff_route"></div>
+              <div class="q"><label class="qlabel" data-zh="搭乘的航空" data-en="Airline">搭乘的航空</label><input type="text" name="dropoff_airline"></div>
+            </div>
+            <div class="row3">
+              <div class="q"><label class="qlabel" data-zh="起飛日期" data-en="Departure Date">起飛日期</label><input type="date" name="dropoff_date"></div>
+              <div class="q"><label class="qlabel" data-zh="起飛時間" data-en="Departure Time">起飛時間</label><input type="text" name="dropoff_time" data-ph-zh="例 14:30" data-ph-en="e.g. 14:30" placeholder="例 14:30"></div>
+              <div class="q"><label class="qlabel" data-zh="人數" data-en="Pax">人數</label><input type="number" name="dropoff_pax" min="1"></div>
+            </div>
+          </fieldset>
+          <fieldset class="group">
+            <legend data-zh="市區接送 City Transfer" data-en="City Transfer">市區接送 City Transfer</legend>
+            <div class="q"><label class="qlabel" data-zh="方向" data-en="Direction">方向</label>
+              <div class="opts inline">
+                <label><input type="radio" name="city_dir" value="City → Rainbowstar">City → Rainbowstar</label>
+                <label><input type="radio" name="city_dir" value="Rainbowstar → City">Rainbowstar → City</label>
+              </div>
+            </div>
+            <div class="row2">
+              <div class="q"><label class="qlabel" data-zh="接送日期" data-en="Date">接送日期</label><input type="date" name="city_date"></div>
+              <div class="q"><label class="qlabel" data-zh="時間" data-en="Time">時間</label><input type="text" name="city_time" data-ph-zh="例 14:30" data-ph-en="e.g. 14:30" placeholder="例 14:30"></div>
+            </div>
+            <div class="row2">
+              <div class="q"><label class="qlabel" data-zh="地點" data-en="Place">地點</label><input type="text" name="city_place"></div>
+              <div class="q"><label class="qlabel" data-zh="人數" data-en="Pax">人數</label><input type="number" name="city_pax" min="1"></div>
+            </div>
+          </fieldset>
+          <div class="q"><label class="qlabel" data-zh="加購餐點 — 忌諱的食物" data-en="Meal add-on — food allergies / dislikes">加購餐點 — 忌諱的食物</label><input type="text" name="meal_avoid" data-ph-zh="例如：牛肉、豬肉、羊肉" data-ph-en="e.g. beef, pork, lamb" placeholder="例如：牛肉、豬肉、羊肉"></div>
+        </div>
+
+        <div class="agree">
+          <label><input type="checkbox" name="ack_phone" value="OK" required>
+            <span data-zh="我已記下你們的連絡電話（紐西蘭境內 021-550819；國際 0064-21550819）" data-en="I have noted your contact number (within NZ 021-550819; international 0064-21550819)">我已記下你們的連絡電話（紐西蘭境內 021-550819；國際 0064-21550819）</span><span class="req">&nbsp;*</span></label>
+        </div>
+        <div class="agree">
+          <label><input type="checkbox" name="agree_price" value="我已了解" required>
+            <span data-zh="我已經了解你們的價格與付款方式。（露宿帳篷與愛車的朋友，室內僅提供廁所、浴室、廚房使用）" data-en="I understand your prices and payment methods. (Tent/vehicle guests: indoor access is limited to toilet, bathroom and kitchen.)">我已經了解你們的價格與付款方式。（露宿帳篷與愛車的朋友，室內僅提供廁所、浴室、廚房使用）</span><span class="req">&nbsp;*</span></label>
+        </div>
+
+        <button type="submit" class="btn" data-zh="送出住宿申請" data-en="Submit Accommodation Application">送出住宿申請</button>
+        <div class="msg" id="msgStay"></div>
+      </form>
+
+      <!-- ============ 換宿申請 ============ -->
+      <form id="formWork" class="appform hidden">
+        <p class="form-intro" data-zh="換宿申請 Work Exchange — 請詳細填寫唷～" data-en="Work Exchange Application — please fill in carefully">換宿申請 Work Exchange — 請詳細填寫唷～</p>
+        <input type="hidden" name="type" value="workexchange">
+
+        <div class="row2">
+          <div class="q"><label class="qlabel"><span class="secnum">1</span><span data-zh="英文姓名" data-en="English Name">英文姓名</span> <span class="req">*</span></label><input type="text" name="name_en" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">2</span><span data-zh="中文姓名" data-en="Chinese Name">中文姓名</span> <span class="req">*</span></label><input type="text" name="name_zh" required></div>
+        </div>
+        <div class="row3">
+          <div class="q"><label class="qlabel"><span class="secnum">3</span><span data-zh="出生日期" data-en="Date of Birth">出生日期</span> <span class="req">*</span></label><input type="date" name="birthday" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">4</span><span data-zh="年齡" data-en="Age">年齡</span> <span class="req">*</span></label><input type="number" name="age" min="0" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">5</span><span data-zh="性別" data-en="Gender">性別</span> <span class="req">*</span></label>
+            <div class="opts inline">
+              <label><input type="radio" name="gender" value="男" required><span data-zh="男" data-en="Male">男</span></label>
+              <label><input type="radio" name="gender" value="女"><span data-zh="女" data-en="Female">女</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="q"><label class="qlabel"><span class="secnum">6</span><span data-zh="國家" data-en="Country">國家</span> <span class="req">*</span></label><input type="text" name="country" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">7</span>E-mail <span class="req">*</span></label><input type="email" name="email" required></div>
+        </div>
+        <div class="row2">
+          <div class="q"><label class="qlabel"><span class="secnum">8</span><span data-zh="連絡電話" data-en="Phone">連絡電話</span> <span class="req">*</span></label><input type="text" name="phone" required></div>
+          <div class="q"><label class="qlabel"><span class="secnum">9</span><span data-zh="居住地址" data-en="Residential Address">居住地址</span> <span class="req">*</span></label><input type="text" name="address" required></div>
+        </div>
+
+        <fieldset class="group">
+          <legend data-zh="10. 緊急連絡人" data-en="10. Emergency Contact">10. 緊急連絡人</legend>
+          <div class="row3">
+            <div class="q"><label class="qlabel" data-zh="緊急連絡人 *" data-en="Emergency Contact *">緊急連絡人 *</label><input type="text" name="emergency_name" required></div>
+            <div class="q"><label class="qlabel" data-zh="與其關係 *" data-en="Relationship *">與其關係 *</label><input type="text" name="emergency_relation" required></div>
+            <div class="q"><label class="qlabel" data-zh="緊急連絡電話 *" data-en="Emergency Phone *">緊急連絡電話 *</label><input type="text" name="emergency_phone" required></div>
+          </div>
+        </fieldset>
+
+        <div class="q"><label class="qlabel"><span class="secnum">11</span><span data-zh="申請換宿時間" data-en="Work-exchange Duration">申請換宿時間</span> <span class="req">*</span><span class="hint" data-zh="換宿時間最少兩週" data-en="Minimum 2 weeks">換宿時間最少兩週</span></label>
+          <div class="opts">
+            <label><input type="radio" name="stay_length" value="申請換宿兩週" required><span data-zh="申請換宿兩週" data-en="2 weeks">申請換宿兩週</span></label>
+            <label><input type="radio" name="stay_length" value="申請換宿三週"><span data-zh="申請換宿三週" data-en="3 weeks">申請換宿三週</span></label>
+            <label><input type="radio" name="stay_length" value="申請換宿一個月"><span data-zh="申請換宿一個月" data-en="1 month">申請換宿一個月</span></label>
+            <label><input type="radio" name="stay_length" value="申請換宿一個月以上"><span data-zh="申請換宿一個月以上" data-en="More than 1 month">申請換宿一個月以上</span></label>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="q"><label class="qlabel" data-zh="希望換宿日期 *" data-en="Preferred Start Date *">希望換宿日期 *</label><input type="date" name="start_date" required></div>
+          <div class="q"><label class="qlabel" data-zh="結束日期 *" data-en="End Date *">結束日期 *</label><input type="date" name="end_date" required></div>
+        </div>
+
+        <div class="q"><label class="qlabel"><span class="secnum">12</span><span data-zh="你的部落格 或 FB" data-en="Your blog or Facebook">你的部落格 或 FB</span> <span class="req">*</span></label><input type="text" name="blog_fb" required></div>
+        <div class="q"><label class="qlabel"><span class="secnum">13</span><span data-zh="請給我們一張能清楚看到你面容的照片連結" data-en="A photo link clearly showing your face">請給我們一張能清楚看到你面容的照片連結</span> <span class="req">*</span></label><input type="text" name="photo_url" data-ph-zh="圖片網址連結" data-ph-en="Image URL" placeholder="圖片網址連結" required></div>
+        <div class="q"><label class="qlabel"><span class="secnum">14</span><span data-zh="你會說哪些語言" data-en="Languages you speak">你會說哪些語言</span> <span class="req">*</span></label><input type="text" name="languages" required></div>
+
+        <div class="q"><label class="qlabel"><span class="secnum">15</span><span data-zh="是否備有國際認可的駕照" data-en="Do you hold an internationally recognized driver's license?">是否備有國際認可的駕照</span> <span class="req">*</span></label>
+          <div class="opts inline">
+            <label><input type="radio" name="has_license" value="YES" required>YES</label>
+            <label><input type="radio" name="has_license" value="NO">NO</label>
+          </div>
+        </div>
+        <div class="q"><label class="qlabel"><span class="secnum">16</span><span data-zh="你的興趣" data-en="Your interests">你的興趣</span> <span class="req">*</span></label><input type="text" name="interests" required></div>
+
+        <div class="q"><label class="qlabel"><span class="secnum">17</span><span data-zh="身體和心理狀況是否良好" data-en="Are you in good physical and mental health?">身體和心理狀況是否良好</span> <span class="req">*</span></label>
+          <div class="opts inline">
+            <label><input type="radio" name="health_ok" value="YES" required>YES</label>
+            <label><input type="radio" name="health_ok" value="NO">NO</label>
+          </div>
+        </div>
+        <div class="q"><label class="qlabel" data-zh="如果填 NO，請詳細敘述您的狀況，以免造成日後的誤會" data-en="If NO, please describe your condition in detail to avoid future misunderstanding">如果填 NO，請詳細敘述您的狀況，以免造成日後的誤會</label><input type="text" name="health_detail"></div>
+
+        <div class="q"><label class="qlabel"><span class="secnum">18</span><span data-zh="是否有過類似的換宿經驗" data-en="Have you done similar work exchange before?">是否有過類似的換宿經驗</span> <span class="req">*</span></label>
+          <div class="opts inline">
+            <label><input type="radio" name="has_exchange_exp" value="YES" required>YES</label>
+            <label><input type="radio" name="has_exchange_exp" value="NO">NO</label>
+          </div>
+        </div>
+        <div class="q"><label class="qlabel" data-zh="若有類似經驗，請簡述當時的工作狀況" data-en="If yes, briefly describe the work you did">若有類似經驗，請簡述當時的工作狀況</label><input type="text" name="exchange_exp_detail"></div>
+
+        <div class="q"><label class="qlabel"><span class="secnum">19</span><span data-zh="請簡述你的學歷" data-en="Briefly describe your education">請簡述你的學歷</span> <span class="req">*</span></label><input type="text" name="education" required></div>
+        <div class="q"><label class="qlabel"><span class="secnum">20</span><span data-zh="請簡述你的工作經驗" data-en="Briefly describe your work experience">請簡述你的工作經驗</span> <span class="req">*</span></label><textarea name="work_exp" rows="3" required></textarea></div>
+        <div class="q"><label class="qlabel"><span class="secnum">21</span><span data-zh="自我介紹（個性 &amp; 工作態度 &amp; 喜愛的寵物）" data-en="Self-introduction (personality, work attitude, favorite pets)">自我介紹（個性 &amp; 工作態度 &amp; 喜愛的寵物）</span> <span class="req">*</span></label><textarea name="self_intro" rows="4" required></textarea></div>
+
+        <div class="agree"><label><input type="checkbox" name="agree_rules" value="我同意" required><span data-zh="我已經看完換宿章則及工作內容，並且同意也願意遵守。" data-en="I have read the work-exchange rules and job description, and I agree to follow them.">我已經看完換宿章則及工作內容，並且同意也願意遵守。</span><span class="req">&nbsp;*</span></label></div>
+        <div class="agree"><label><input type="checkbox" name="agree_work" value="我了解" required><span data-zh="我已清楚了解工作內容，確定可以勝任此份工作。" data-en="I clearly understand the job and am confident I can do it.">我已清楚了解工作內容，確定可以勝任此份工作。</span><span class="req">&nbsp;*</span></label></div>
+        <div class="agree"><label><input type="checkbox" name="agree_responsible" value="我願意" required><span data-zh="我願意對這份文件所填寫的內容負責。" data-en="I take responsibility for the information provided in this form.">我願意對這份文件所填寫的內容負責。</span><span class="req">&nbsp;*</span></label></div>
+        <div class="q"><label class="qlabel" data-zh="備註" data-en="Notes">備註</label><input type="text" name="remark"></div>
+
+        <button type="submit" class="btn" data-zh="送出換宿申請" data-en="Submit Work Exchange Application">送出換宿申請</button>
+        <div class="msg" id="msgWork"></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="kicker">Contact</span>
+      <h2 data-zh="聯絡我們" data-en="Contact">聯絡我們</h2>
+    </div>
+    <div class="grid cols-3">
+      <div class="card"><div class="ico">📍</div><h3 data-zh="地點" data-en="Location">地點</h3><p data-content="location_text" data-zh="紐西蘭 基督城 Christchurch, New Zealand" data-en="Christchurch, New Zealand">紐西蘭 基督城 Christchurch, New Zealand</p></div>
+      <div class="card"><div class="ico">✉️</div><h3>Email</h3><p><a data-content="contact_email" id="contactEmail" href="#">—</a></p></div>
+      <div class="card"><div class="ico">💬</div><h3 data-zh="電話 / LINE" data-en="Phone / LINE">電話 / LINE</h3><p data-content="contact_line">021-550819 ／ 0064-21550819</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="brand" style="justify-content:center;color:#fff"><span class="dot"></span><span data-content="site_name">彩虹星民宿 Rainbowstar</span></div>
+    <div class="f-links">
+      <a href="#stay" data-zh="住宿" data-en="Stay">住宿</a>
+      <a href="#work" data-zh="換宿" data-en="Work Exchange">換宿</a>
+      <a href="#apply" data-zh="線上申請" data-en="Apply">線上申請</a>
+      <a href="#contact" data-zh="聯絡" data-en="Contact">聯絡</a>
+    </div>
+    <div class="credit">© <span id="year"></span> Rainbowstar Farmstay · <span data-zh="內容由 Google Sheet 管理，主人可隨時自行更新" data-en="Content managed via Google Sheet, editable anytime by the owner">內容由 Google Sheet 管理，主人可隨時自行更新</span></div>
+  </div>
+</footer>
+
+<script>
+var CFG = window.RAINBOWSTAR_CONFIG || {};
+document.getElementById('year').textContent = new Date().getFullYear();
+function closeMenu(){ document.getElementById('navlinks').classList.remove('open'); }
+
+/* ===== 語言 i18n ===== */
+var LANG = 'zh';
+try { LANG = localStorage.getItem('rb_lang') || 'zh'; } catch(e){}
+var MSG = {
+  ok:  {zh:'✅ 申請已送出，我們會盡快與你聯絡！', en:'✅ Application sent! We will contact you soon.'},
+  err: {zh:'送出失敗，請稍後再試，或直接 email 我們。', en:'Submission failed. Please try again or email us.'},
+  noBackend: {zh:'網站尚未連接後端（請站長在 index.html 填入 Apps Script 網址）。', en:'Backend not connected yet — the owner needs to add the Apps Script URL in index.html.'},
+  sending: {zh:'送出中…', en:'Sending…'}
+};
+function tx(o){ return o[LANG==='en'?'en':'zh']; }
+
+function applyLang(){
+  document.documentElement.lang = (LANG==='en' ? 'en' : 'zh-Hant');
+  document.querySelectorAll('[data-zh]').forEach(function(el){
+    var t = (LANG==='en') ? el.getAttribute('data-en') : el.getAttribute('data-zh');
+    if(t !== null && t !== undefined) el.innerHTML = t;
+  });
+  document.querySelectorAll('[data-ph-zh]').forEach(function(el){
+    var t = (LANG==='en') ? el.getAttribute('data-ph-en') : el.getAttribute('data-ph-zh');
+    if(t !== null && t !== undefined) el.setAttribute('placeholder', t);
+  });
+  var lb = document.getElementById('langBtn');
+  if(lb) lb.textContent = (LANG==='en') ? '中' : 'EN';
+  if(window._lastData) applyContent(window._lastData);
+}
+function toggleLang(){
+  LANG = (LANG==='en') ? 'zh' : 'en';
+  try { localStorage.setItem('rb_lang', LANG); } catch(e){}
+  applyLang();
+}
+
+function setType(t){
+  var stay = (t === 'accommodation');
+  document.getElementById('seg-stay').classList.toggle('active', stay);
+  document.getElementById('seg-work').classList.toggle('active', !stay);
+  document.getElementById('formStay').classList.toggle('hidden', !stay);
+  document.getElementById('formWork').classList.toggle('hidden', stay);
+}
+function toggleAddon(show){ document.getElementById('addonDetails').classList.toggle('hidden', !show); }
+
+function applyContent(data){
+  window._lastData = data;
+  var s = (data && data.settings) || {};
+  function valFor(key){
+    if(LANG==='en' && s[key+'_en'] !== undefined && s[key+'_en'] !== '' && s[key+'_en'] !== null) return s[key+'_en'];
+    return s[key];
+  }
+  document.querySelectorAll('[data-content]').forEach(function(el){
+    var key = el.getAttribute('data-content');
+    var v = valFor(key);
+    if(v !== undefined && v !== null && v !== ''){
+      var val = String(v);
+      el.innerHTML = (val.indexOf('\n') >= 0) ? val.replace(/\n/g,'<br>') : escapeHtml(val);
+    }
+  });
+  if(s.contact_email){
+    var a = document.getElementById('contactEmail');
+    if(a){ a.textContent = s.contact_email; a.href = 'mailto:' + s.contact_email; }
+  }
+  if(s.hero_image){ document.querySelector('.hero').style.setProperty('--hero-img','url("'+s.hero_image+'")'); }
+  if(data && Array.isArray(data.rooms) && data.rooms.length){ renderRooms(data.rooms); }
+}
+function renderRooms(rooms){
+  function pick(r, base){
+    if(LANG==='en' && r[base+'_en'] !== undefined && r[base+'_en'] !== '' && r[base+'_en'] !== null) return r[base+'_en'];
+    return r[base];
+  }
+  var host = document.getElementById('rooms-list'); host.innerHTML='';
+  rooms.forEach(function(r){
+    var price = (r.price===undefined||r.price==='') ? '—' : r.price;
+    var unit = pick(r,'unit') || '';
+    var note = pick(r,'note');
+    var div = document.createElement('div'); div.className='room';
+    div.innerHTML = '<div class="name"></div><div class="desc"></div>'+
+      '<div class="price">'+(String(price).indexOf('$')>=0?'':'$')+escapeHtml(price)+'<span class="unit"> '+escapeHtml(unit)+'</span></div>'+
+      (note?'<div class="note"></div>':'');
+    div.querySelector('.name').textContent = pick(r,'name')||'';
+    div.querySelector('.desc').textContent = pick(r,'description')||'';
+    if(note) div.querySelector('.note').textContent = note;
+    host.appendChild(div);
+  });
+}
+function escapeHtml(x){ return String(x).replace(/[&<>"']/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+
+function loadContent(){
+  if(!CFG.WEBAPP_URL) return;
+  var banner = document.getElementById('loadingBanner'); banner.style.display='block';
+  fetch(CFG.WEBAPP_URL + '?_=' + Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(data){ if(data) applyContent(data); })
+    .catch(function(err){ console.warn('內容載入失敗，使用預設內容：', err); })
+    .finally(function(){ banner.style.display='none'; });
+}
+
+/* ===== 防亂填驗證 Validation ===== */
+function isRepeated(s){ return /^(.)\1+$/.test(s); }
+function looksFake(s){ s=(s||'').trim(); return s.length<2 || isRepeated(s); }
+function digitsOnly(s){ return (s||'').replace(/[^0-9]/g,''); }
+function isURL(s){ return /^https?:\/\/.+\..+/i.test((s||'').trim()); }
+function isEmail(s){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((s||'').trim()); }
+function vmsg(zh,en){ return (LANG==='en'?en:zh); }
+function has(form,n){ return !!form.querySelector('[name="'+n+'"]'); }
+
+function validate(form){
+  var f=function(n){var el=form.querySelector('[name="'+n+'"]'); return el?el.value:'';};
+  var errs=[];
+  function bad(name,zh,en){ errs.push({name:name, msg:vmsg(zh,en)}); }
+  if(has(form,'name_en')){ var ne=f('name_en'); if(!/[A-Za-z]{2,}/.test(ne)||looksFake(ne)) bad('name_en','英文姓名請填寫正確（至少兩個英文字母）','Please enter a valid English name'); }
+  if(has(form,'name_zh') && looksFake(f('name_zh'))) bad('name_zh','中文姓名請填寫正確','Please enter a valid name');
+  if(has(form,'country') && looksFake(f('country'))) bad('country','國家請填寫正確','Please enter a valid country');
+  if(has(form,'phone') && digitsOnly(f('phone')).length<6) bad('phone','電話請填寫正確（至少 6 位數字）','Please enter a valid phone number (at least 6 digits)');
+  if(has(form,'email') && !isEmail(f('email'))) bad('email','Email 格式不正確','Please enter a valid email');
+  if(has(form,'passport')){ var pp=f('passport').trim(); if(pp.length<5||looksFake(pp)||!/[A-Za-z0-9]/.test(pp)) bad('passport','護照號碼請填寫正確','Please enter a valid passport number'); }
+  if(has(form,'guests') && !(parseInt(f('guests'),10)>=1)) bad('guests','入住人數請填寫數字','Please enter a valid number of guests');
+  if(has(form,'checkin') && has(form,'checkout')){ var ci=f('checkin'),co=f('checkout'); if(ci&&co&&co<=ci) bad('checkout','退房日期需晚於入住日期','Check-out must be after check-in'); }
+  if(has(form,'address') && (looksFake(f('address'))||f('address').trim().length<4)) bad('address','居住地址請填寫正確','Please enter a valid address');
+  if(has(form,'emergency_phone') && digitsOnly(f('emergency_phone')).length<6) bad('emergency_phone','緊急連絡電話請填寫正確','Please enter a valid emergency phone');
+  if(has(form,'emergency_name') && looksFake(f('emergency_name'))) bad('emergency_name','緊急連絡人請填寫正確','Please enter a valid emergency contact');
+  if(has(form,'photo_url') && !isURL(f('photo_url'))) bad('photo_url','照片連結請填有效網址（http 開頭）','Please enter a valid photo URL (starting with http)');
+  if(has(form,'age')){ var ag=parseInt(f('age'),10); if(!(ag>=10&&ag<=99)) bad('age','年齡請填寫正確','Please enter a valid age'); }
+  if(has(form,'start_date') && has(form,'end_date')){ var sd=f('start_date'),ed=f('end_date'); if(sd&&ed&&ed<sd) bad('end_date','結束日期不可早於開始日期','End date cannot be before start date'); }
+  if(has(form,'birthday')){ var bd=f('birthday'); if(bd){ var by=new Date(bd),now=new Date(),age=(now-by)/(31557600000); if(by>now||age>120) bad('birthday','出生日期不正確','Date of birth is invalid'); } }
+  return errs;
+}
+function clearInvalid(form){ Array.prototype.forEach.call(form.querySelectorAll('.invalid'),function(e){e.classList.remove('invalid');}); }
+function showErrors(msg, errs, form){
+  errs.forEach(function(e){ var el=form.querySelector('[name="'+e.name+'"]'); if(el) el.classList.add('invalid'); });
+  msg.className='msg err';
+  msg.innerHTML = vmsg('請修正以下欄位：','Please fix the following:') + '<br>• ' + errs.map(function(e){return e.msg;}).join('<br>• ');
+  var first=form.querySelector('.invalid'); if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function attachSubmit(formId, msgId){
+  var form = document.getElementById(formId);
+  var msg = document.getElementById(msgId);
+  form.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    msg.className='msg'; msg.textContent=''; clearInvalid(form);
+    var errs = validate(form);
+    if(errs.length){ showErrors(msg, errs, form); return; }
+    if(!CFG.WEBAPP_URL){ msg.className='msg err'; msg.textContent=tx(MSG.noBackend); return; }
+    var btn = form.querySelector('button[type=submit]');
+    btn.disabled=true; var old=btn.textContent; btn.textContent=tx(MSG.sending);
+    var body = new URLSearchParams(new FormData(form));
+    fetch(CFG.WEBAPP_URL, { method:'POST', mode:'no-cors', body: body })
+      .then(function(){
+        msg.className='msg ok'; msg.textContent=tx(MSG.ok);
+        form.reset(); if(formId==='formStay') toggleAddon(false);
+        msg.scrollIntoView({behavior:'smooth', block:'center'});
+      })
+      .catch(function(){ msg.className='msg err'; msg.textContent=tx(MSG.err); })
+      .finally(function(){ btn.disabled=false; btn.textContent=old; });
+  });
+}
+
+
+applyLang();
+attachSubmit('formStay','msgStay');
+attachSubmit('formWork','msgWork');
+loadContent();
+</script>
+</body>
+</html>
