@@ -110,17 +110,19 @@ rainbowstar/
   "description": "Rainbowstar farmstay website: static front end, Google Apps Script back end.",
   "type": "commonjs",
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test tests/**/*.test.js"
   }
 }
 ```
 
 不要加任何 `dependencies` 或 `devDependencies`（Global Constraint 2）。
 
+> **為何不是 `node --test tests/`？** 在 Windows + Node v24 下，Node 會把 `tests` 當成單一測試檔並報 `Cannot find module '...\tests'`。改用 glob 即可，且已實測會抓到後續新增的測試檔。
+
 - [ ] **Step 2: 確認 Node 版本足夠**
 
 Run: `node --version`
-Expected: `v18.0.0` 或更高（`node --test` 需要 v18+）。若低於 v18，先升級 Node 再繼續。
+Expected: `v18.0.0` 或更高（`node --test` 需要 v18+；glob 展開需 v21+，本機為 v24.15.0）。
 
 - [ ] **Step 3: 寫失敗的測試**
 
