@@ -333,7 +333,11 @@ Google Drive 公開直連網址歷史上不穩。採**雙軌 + 可退回**：
 
 ## 14. 安全性考量
 
-- **後台密碼**：低敏感內容管理，單一共享密碼 + 同源 `google.script.run` 足夠。密碼存 Script Properties，不入版控，且不在前端比對。
+- **後台密碼**：密碼存 Script Properties，不入版控，且不在前端比對。
+- **⚠️ 每個後台函式必須自行授權（關鍵）**：Web App 存取權為「任何人」，因此**任何人載入 `?page=admin` 後即可直接呼叫 `google.script.run.saveContent(...)` 等函式**。同源**不等於**已授權。
+  作法：`verifyPasscode(passcode)` 驗證成功後產生一次性 session token（`Utilities.getUuid()`），存入 `CacheService`（6 小時）；其餘所有後台函式（`loadAdminContent` / `saveContent` / `saveList` / `uploadPhoto` / `deletePhoto` / `reorderPhotos`）**第一個參數皆為 token**，並在進入時呼叫 `assertAuthorized_(token)`，不符即拋出。
+- **⚠️ `?img=<fileId>` 必須限制範圍（關鍵）**：若不驗證，此端點會成為「業者整個 Drive 的公開讀取代理」——任何人傳入任意 `fileId` 即可取得業者有權讀取的任何檔案。
+  作法：供圖前確認該檔案的上層資料夾位於 `PHOTO_ROOT_FOLDER_ID` 之下，否則回傳 404。
 - **公開 Web App**：存取權「任何人」是讀內容/收表單所需。既有 `ACCOM_FIELDS`/`WORK_FIELDS` 白名單即防止任意寫入其他分頁的防線，**須保留**。
 - **表單濫用/spam**：沿用前端驗證 + 後端欄位白名單 + `checkSuspicious_()` 標記。未來可加 honeypot 或 Turnstile。
 - **個資**：表單含護照號、緊急聯絡、出生日期等；試算表僅業者帳號可編輯。公開站不顯示任何回應資料。
