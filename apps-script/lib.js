@@ -183,6 +183,44 @@ function buildEmailBody(type, fields, get, flag) {
   return lines.join('\n');
 }
 
+var LIST_NAMES = ['rules', 'duties_out', 'duties_in'];
+
+function groupLists(rows) {
+  var grouped = { rules: [], duties_out: [], duties_in: [] };
+
+  (rows || []).forEach(function (row) {
+    var listName = String(row.list || '').trim();
+    if (LIST_NAMES.indexOf(listName) < 0) return;
+
+    var zh = String(row.text_zh === undefined || row.text_zh === null ? '' : row.text_zh).trim();
+    var en = String(row.text_en === undefined || row.text_en === null ? '' : row.text_en).trim();
+    if (!zh && !en) return;
+
+    var order = Number(row.order);
+    grouped[listName].push({ order: isNaN(order) ? 0 : order, zh: zh, en: en });
+  });
+
+  LIST_NAMES.forEach(function (listName) {
+    grouped[listName].sort(function (a, b) { return a.order - b.order; });
+    grouped[listName] = grouped[listName].map(function (item) {
+      return { zh: item.zh, en: item.en };
+    });
+  });
+
+  return grouped;
+}
+
+function listRowsFrom(listName, items) {
+  var rows = [];
+  (items || []).forEach(function (item) {
+    var zh = String(item.zh || '').trim();
+    var en = String(item.en || '').trim();
+    if (!zh && !en) return;
+    rows.push([listName, rows.length + 1, zh, en]);
+  });
+  return rows;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     splitUrls: splitUrls,
@@ -198,6 +236,9 @@ if (typeof module !== 'undefined' && module.exports) {
     checkSuspicious: checkSuspicious,
     isValidEmail: isValidEmail,
     buildEmailSubject: buildEmailSubject,
-    buildEmailBody: buildEmailBody
+    buildEmailBody: buildEmailBody,
+    LIST_NAMES: LIST_NAMES,
+    groupLists: groupLists,
+    listRowsFrom: listRowsFrom
   };
 }

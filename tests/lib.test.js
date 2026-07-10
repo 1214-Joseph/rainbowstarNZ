@@ -237,3 +237,60 @@ test('buildEmailSubject produces unchanged output for ordinary names without new
   const subject = lib.buildEmailSubject('accommodation', getter({ name_zh: '王美' }), '⚠️ 電話可疑');
   assert.equal(subject, '【彩虹星民宿】新住宿申請 Accommodation - 王美（⚠️ 電話可疑）');
 });
+
+test('groupLists sorts each list by its order column', () => {
+  const rows = [
+    { list: 'rules', order: 2, text_zh: '第二', text_en: 'Second' },
+    { list: 'rules', order: 1, text_zh: '第一', text_en: 'First' },
+    { list: 'duties_out', order: 1, text_zh: '餵貓', text_en: 'Feed the cats' }
+  ];
+  const grouped = lib.groupLists(rows);
+  assert.deepEqual(grouped.rules, [
+    { zh: '第一', en: 'First' },
+    { zh: '第二', en: 'Second' }
+  ]);
+  assert.deepEqual(grouped.duties_out, [{ zh: '餵貓', en: 'Feed the cats' }]);
+  assert.deepEqual(grouped.duties_in, []);
+});
+
+test('groupLists always returns all three keys, even with no rows', () => {
+  assert.deepEqual(lib.groupLists([]), { rules: [], duties_out: [], duties_in: [] });
+  assert.deepEqual(lib.groupLists(null), { rules: [], duties_out: [], duties_in: [] });
+});
+
+test('groupLists ignores unknown list names and fully blank rows', () => {
+  const rows = [
+    { list: 'nonsense', order: 1, text_zh: 'x', text_en: 'x' },
+    { list: 'rules', order: 1, text_zh: '', text_en: '' },
+    { list: 'rules', order: 2, text_zh: '保留', text_en: '' }
+  ];
+  assert.deepEqual(lib.groupLists(rows).rules, [{ zh: '保留', en: '' }]);
+});
+
+test('groupLists treats a missing or non-numeric order as zero', () => {
+  const rows = [
+    { list: 'rules', order: 1, text_zh: 'b', text_en: '' },
+    { list: 'rules', order: '', text_zh: 'a', text_en: '' }
+  ];
+  assert.deepEqual(lib.groupLists(rows).rules.map((i) => i.zh), ['a', 'b']);
+});
+
+test('listRowsFrom renumbers order from one, preserving the given sequence', () => {
+  const items = [{ zh: '甲', en: 'A' }, { zh: '乙', en: 'B' }];
+  assert.deepEqual(lib.listRowsFrom('rules', items), [
+    ['rules', 1, '甲', 'A'],
+    ['rules', 2, '乙', 'B']
+  ]);
+});
+
+test('listRowsFrom drops items that are blank in both languages', () => {
+  const items = [{ zh: '甲', en: '' }, { zh: '', en: '' }, { zh: '', en: 'C' }];
+  assert.deepEqual(lib.listRowsFrom('duties_in', items), [
+    ['duties_in', 1, '甲', ''],
+    ['duties_in', 2, '', 'C']
+  ]);
+});
+
+test('LIST_NAMES holds exactly the three editable lists', () => {
+  assert.deepEqual(lib.LIST_NAMES, ['rules', 'duties_out', 'duties_in']);
+});
