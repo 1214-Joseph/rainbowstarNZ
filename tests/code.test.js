@@ -94,18 +94,33 @@ test('buildContentPayload_ still succeeds when every content tab is missing', ()
   assert.deepEqual(payload.rules, []);
 });
 
-/** A writable stand-in that records appendRow / getRange().setValues() calls. */
+/** A writable stand-in supporting appendRow, setValue, setValues and clear. */
 function fakeWritableSheet(values) {
   const rows = values.map((r) => r.slice());
+
+  function ensure(rowIndex, colCount) {
+    while (rows.length <= rowIndex) rows.push([]);
+    while (rows[rowIndex].length < colCount) rows[rowIndex].push('');
+  }
+
   return {
     rows,
     getLastRow: () => rows.length,
     getDataRange: () => ({ getValues: () => rows }),
     appendRow: (row) => rows.push(row.slice()),
+    clear: () => { rows.length = 0; },
     getRange: (startRow, startCol, numRows, numCols) => ({
+      setValue: (value) => {
+        ensure(startRow - 1, startCol);
+        rows[startRow - 1][startCol - 1] = value;
+      },
       setValues: (newValues) => {
-        for (let i = 0; i < numRows; i++) {
-          rows[startRow - 1 + i] = newValues[i].slice();
+        const height = numRows === undefined ? newValues.length : numRows;
+        for (let i = 0; i < height; i++) {
+          ensure(startRow - 1 + i, startCol - 1 + newValues[i].length);
+          for (let j = 0; j < newValues[i].length; j++) {
+            rows[startRow - 1 + i][startCol - 1 + j] = newValues[i][j];
+          }
         }
       }
     })
@@ -652,4 +667,123 @@ test('doGet with no parameters returns ok:false when buildContentPayload_ throws
   const result = code.doGet({ parameter: {} });
   assert.equal(result.ok, false);
   assert.match(result.error, /Spreadsheet access failed/);
+});
+
+function authorizedToken() {
+  stubScriptProperties({ ADMIN_PASSCODE: 'letmein', PHOTO_ROOT_FOLDER_ID: 'ROOT' });
+  stubCache();
+  global.Utilities = {
+    getUuid: () => 'uuid-1',
+    computeDigest: function(algo, input) {
+      const bytes = [];
+      for (let i = 0; i < 32; i++) {
+        bytes.push((input.charCodeAt(i % input.length) + i) % 256 - 128);
+      }
+      return bytes;
+    },
+    DigestAlgorithm: { SHA_256: 'sha256' }
+  };
+  return code.verifyPasscode('letmein').token;
+}
+
+test('upsertSettings_ updates existing keys and appends new ones, leaving others alone', () => {
+  const sheet = fakeWritableSheet([
+    ['key', 'value'],
+    ['site_name', '舊站名'],
+    ['hero_photos', 'a.jpg']
+  ]);
+  const ss = fakeWritableSpreadsheet({ settings: sheet });
+
+  code.upsertSettings_(ss, { site_name: '新站名', tagline_en: 'New tagline' });
+
+  assert.deepEqual(sheet.rows[1], ['site_name', '新站名']);
+  assert.deepEqual(sheet.rows[2], ['hero_photos', 'a.jpg'], 'photo keys survive a text save');
+  assert.deepEqual(sheet.rows[3], ['tagline_en', 'New tagline']);
+});
+
+test('upsertSettings_ creates the tab with a header when it is missing', () => {
+  const ss = fakeWritableSpreadsheet({});
+  code.upsertSettings_(ss, { site_name: 'Rainbowstar' });
+
+  const sheet = ss.getSheetByName('settings');
+  assert.deepEqual(sheet.rows[0], ['key', 'value']);
+  assert.deepEqual(sheet.rows[1], ['site_name', 'Rainbowstar']);
+});
+
+test('writeRooms_ rewrites the tab under the canonical column order', () => {
+  const ss = fakeWritableSpreadsheet({ rooms: fakeWritableSheet([['name'], ['舊房型']]) });
+
+  code.writeRooms_(ss, [{ name: '主屋', name_en: 'Dorm', price: 35, photos: 'a.jpg' }]);
+
+  const sheet = ss.getSheetByName('rooms');
+  assert.deepEqual(sheet.rows[0], code.ROOM_COLUMNS);
+  assert.equal(sheet.rows.length, 2, 'the old room is gone');
+  assert.equal(sheet.rows[1][code.ROOM_COLUMNS.indexOf('name')], '主屋');
+  assert.equal(sheet.rows[1][code.ROOM_COLUMNS.indexOf('price')], 35);
+  assert.equal(sheet.rows[1][code.ROOM_COLUMNS.indexOf('photos')], 'a.jpg');
+  assert.equal(sheet.rows[1][code.ROOM_COLUMNS.indexOf('note_en')], '', 'absent fields become empty strings');
+});
+
+test('writeLists_ rewrites all three lists with orders renumbered from one', () => {
+  const ss = fakeWritableSpreadsheet({});
+  code.writeLists_(ss, {
+    rules: [{ zh: '第一條', en: 'Rule one' }, { zh: '第二條', en: '' }],
+    duties_out: [{ zh: '餵貓', en: 'Feed the cats' }],
+    duties_in: []
+  });
+
+  const sheet = ss.getSheetByName('workexchange_lists');
+  assert.deepEqual(sheet.rows[0], ['list', 'order', 'text_zh', 'text_en']);
+  assert.deepEqual(sheet.rows[1], ['rules', 1, '第一條', 'Rule one']);
+  assert.deepEqual(sheet.rows[2], ['rules', 2, '第二條', '']);
+  assert.deepEqual(sheet.rows[3], ['duties_out', 1, '餵貓', 'Feed the cats']);
+  assert.equal(sheet.rows.length, 4);
+});
+
+test('loadAdminContent and saveContent and saveList all refuse an invalid token', () => {
+  authorizedToken();
+  assert.throws(() => code.loadAdminContent('bad'), /未授權/);
+  assert.throws(() => code.saveContent('bad', { settings: {}, rooms: [] }), /未授權/);
+  assert.throws(() => code.saveList('bad', 'rules', []), /未授權/);
+});
+
+test('saveContent writes settings and rooms, then loadAdminContent reads them back', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({});
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+
+  code.saveContent(token, {
+    settings: { site_name: 'Rainbowstar', tagline: '標語' },
+    rooms: [{ name: '主屋', price: 35, photos: '' }]
+  });
+
+  const loaded = code.loadAdminContent(token);
+  assert.equal(loaded.ok, true);
+  assert.equal(loaded.settings.site_name, 'Rainbowstar');
+  assert.equal(loaded.rooms[0].name, '主屋');
+});
+
+test('saveList replaces only the named list and leaves the other two intact', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({
+    workexchange_lists: fakeWritableSheet([
+      ['list', 'order', 'text_zh', 'text_en'],
+      ['rules', 1, '舊規則', 'Old rule'],
+      ['duties_in', 1, '清潔', 'Cleaning']
+    ])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+
+  const result = code.saveList(token, 'rules', [{ zh: '新規則', en: 'New rule' }]);
+
+  assert.equal(result.ok, true);
+  const lists = code.__lib.groupLists(code.readListRows_(ss));
+  assert.deepEqual(lists.rules, [{ zh: '新規則', en: 'New rule' }]);
+  assert.deepEqual(lists.duties_in, [{ zh: '清潔', en: 'Cleaning' }]);
+});
+
+test('saveList rejects an unknown list name', () => {
+  const token = authorizedToken();
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => fakeWritableSpreadsheet({}) };
+  assert.throws(() => code.saveList(token, 'nonsense', []), /未知的清單/);
 });

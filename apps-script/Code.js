@@ -320,6 +320,101 @@ function serveImage_(fileId) {
   }
 }
 
+var ROOM_COLUMNS = [
+  'name', 'name_en', 'description', 'description_en',
+  'price', 'unit', 'unit_en', 'note', 'note_en', 'photos'
+];
+var LIST_COLUMNS = ['list', 'order', 'text_zh', 'text_en'];
+
+function sheetOrCreate_(ss, name, header) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    if (header) sheet.appendRow(header);
+  }
+  return sheet;
+}
+
+/**
+ * Updates the given keys in place and appends the rest.
+ *
+ * Photo keys such as hero_photos live in this same tab but are maintained by
+ * the photo functions, so a text save must not rewrite the whole sheet.
+ */
+function upsertSettings_(ss, settings) {
+  var sheet = sheetOrCreate_(ss, SHEET_SETTINGS, ['key', 'value']);
+  var values = sheet.getLastRow() ? sheet.getDataRange().getValues() : [];
+
+  var rowByKey = {};
+  for (var i = 0; i < values.length; i++) {
+    var key = String(values[i][0] || '').trim();
+    if (key && key.toLowerCase() !== 'key') rowByKey[key] = i + 1;
+  }
+
+  Object.keys(settings).forEach(function (key) {
+    var value = settings[key] === undefined || settings[key] === null ? '' : settings[key];
+    if (rowByKey[key]) {
+      sheet.getRange(rowByKey[key], 2, 1, 1).setValue(value);
+    } else {
+      sheet.appendRow([key, value]);
+    }
+  });
+}
+
+function writeRooms_(ss, rooms) {
+  var sheet = sheetOrCreate_(ss, SHEET_ROOMS, null);
+  sheet.clear();
+
+  var table = [ROOM_COLUMNS.slice()];
+  (rooms || []).forEach(function (room) {
+    table.push(ROOM_COLUMNS.map(function (column) {
+      var value = room[column];
+      return value === undefined || value === null ? '' : value;
+    }));
+  });
+  sheet.getRange(1, 1, table.length, ROOM_COLUMNS.length).setValues(table);
+}
+
+function writeLists_(ss, lists) {
+  var sheet = sheetOrCreate_(ss, SHEET_LISTS, null);
+  sheet.clear();
+
+  var table = [LIST_COLUMNS.slice()];
+  LIST_NAMES.forEach(function (listName) {
+    listRowsFrom(listName, lists[listName] || []).forEach(function (row) {
+      table.push(row);
+    });
+  });
+  sheet.getRange(1, 1, table.length, LIST_COLUMNS.length).setValues(table);
+}
+
+function loadAdminContent(token) {
+  assertAuthorized_(token);
+  return buildContentPayload_(SpreadsheetApp.getActiveSpreadsheet());
+}
+
+function saveContent(token, payload) {
+  assertAuthorized_(token);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (payload && payload.settings) upsertSettings_(ss, payload.settings);
+  if (payload && payload.rooms) writeRooms_(ss, payload.rooms);
+
+  return { ok: true };
+}
+
+function saveList(token, listName, items) {
+  assertAuthorized_(token);
+  if (LIST_NAMES.indexOf(listName) < 0) throw new Error('未知的清單 Unknown list: ' + listName);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var lists = groupLists(readListRows_(ss));
+  lists[listName] = items || [];
+  writeLists_(ss, lists);
+
+  return { ok: true, items: lists[listName] };
+}
+
 function serveAdmin_() {
   return HtmlService.createTemplateFromFile('Admin')
     .evaluate()
@@ -352,6 +447,8 @@ if (typeof module !== 'undefined' && module.exports) {
     SHEET_STAY: SHEET_STAY,
     SHEET_WORK: SHEET_WORK,
     SHEET_ERRORS: SHEET_ERRORS,
+    ROOM_COLUMNS: ROOM_COLUMNS,
+    LIST_COLUMNS: LIST_COLUMNS,
     readSettings_: readSettings_,
     readTableRows_: readTableRows_,
     readRooms_: readRooms_,
@@ -361,6 +458,13 @@ if (typeof module !== 'undefined' && module.exports) {
     sendNotifyEmail_: sendNotifyEmail_,
     logError_: logError_,
     handlePost_: handlePost_,
+    sheetOrCreate_: sheetOrCreate_,
+    upsertSettings_: upsertSettings_,
+    writeRooms_: writeRooms_,
+    writeLists_: writeLists_,
+    loadAdminContent: loadAdminContent,
+    saveContent: saveContent,
+    saveList: saveList,
     verifyPasscode: verifyPasscode,
     assertAuthorized_: assertAuthorized_,
     revokeToken: revokeToken,
