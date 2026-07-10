@@ -5311,17 +5311,9 @@ fetch('<WEBAPP_URL>', {
 ```
 
 - **若印出 `READABLE {ok: true, ...}`** → 保持 `SUBMIT_MODE = 'readable'`（Task 16 的預設），不需改動。
-- **若印出 `BLOCKED ...`（CORS 錯誤）** → 在 `site/app.js` 把 `SUBMIT_MODE` 改為 `'opaque'`，並在 `apps-script/Code.js` 的 `handlePost_` 之外，額外把例外寫入一個 `errors` 分頁（因為訪客再也讀不到錯誤）：
+- **若印出 `BLOCKED ...`（CORS 錯誤）** → 在 `site/app.js` 把 `SUBMIT_MODE` 改為 `'opaque'`。
 
-```js
-function logError_(ss, context, error) {
-  var sheet = ss.getSheetByName('errors') || ss.insertSheet('errors');
-  if (sheet.getLastRow() === 0) sheet.appendRow(['時間', '情境', '錯誤']);
-  sheet.appendRow([new Date(), context, String(error)]);
-}
-```
-
-並在 `handlePost_` 的 `catch` 內呼叫 `logError_(ss, 'doPost', error)`。
+> **不需要再加 `errors` 分頁的記錄機制。** 原本此處要求在退回 opaque 模式時才補上，但 Task 7 的複審指出：即使在 `readable` 模式，`appendResponse_` 自己拋錯時那筆申請仍會無聲消失。因此 `logError_(ss, context, detail)` 已在 Task 7 無條件實作，`handlePost_` 的 `catch` 與「未知 `type`」兩條路徑都會寫入 `errors` 分頁。此處只需改 `SUBMIT_MODE` 一行。
 
 無論走哪條路，都到試算表確認 `住宿申請` 分頁多了一列「CORS 測試」，然後**刪掉該列**。
 
