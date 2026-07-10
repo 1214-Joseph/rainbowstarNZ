@@ -108,12 +108,6 @@
     });
   }
 
-  function save() {
-    runAuth('saveContent');
-    runAuth('saveList');
-    runAuth('reorderPhotos');
-  }
-
   function uploadPhoto() {
     runAuth('uploadPhoto');
   }
@@ -143,15 +137,221 @@
     });
   }
 
-  /** Filled in by Tasks 18-20. */
-  function renderSections() {}
+  var SECTIONS = [
+    { title: '基本資訊', keys: [
+      { key: 'site_name', label: '站名', translatable: false },
+      { key: 'contact_email', label: '聯絡 Email（顯示在網站上）', translatable: false },
+      { key: 'contact_line', label: '電話 / LINE', translatable: false },
+      { key: 'notify_email', label: '收表單通知信的信箱', translatable: false },
+      { key: 'location_text', label: '地點' }
+    ] },
+    { title: '首頁', photos: 'hero', keys: [
+      { key: 'tagline', label: '首頁標語', multiline: true }
+    ] },
+    { title: '關於我們', keys: [
+      { key: 'intro_text', label: '介紹段落', multiline: true },
+      { key: 'feature_1', label: '特色一：舒適住宿', multiline: true },
+      { key: 'feature_2', label: '特色二：打工換宿', multiline: true },
+      { key: 'feature_3', label: '特色三：生活便利', multiline: true }
+    ] },
+    { title: '住宿', keys: [
+      { key: 'accommodation_intro', label: '住宿區介紹', multiline: true },
+      { key: 'booking_note', label: '預定注意事項', multiline: true }
+    ] },
+    { title: '打工換宿', keys: [
+      { key: 'workexchange_intro', label: '換宿區介紹', multiline: true }
+    ] },
+    { title: '周邊景點', keys: [] }
+  ];
+
+  var ROOM_FIELDS = [
+    { column: 'name', label: '房型名稱' },
+    { column: 'description', label: '房型描述', multiline: true },
+    { column: 'unit', label: '價格單位（例：/ 床）' },
+    { column: 'note', label: '備註（可留空）', multiline: true }
+  ];
+
+  function el(tag, attributes, children) {
+    var node = document.createElement(tag);
+    Object.keys(attributes || {}).forEach(function (name) {
+      if (name === 'class') node.className = attributes[name];
+      else if (name === 'text') node.textContent = attributes[name];
+      else node.setAttribute(name, attributes[name]);
+    });
+    (children || []).forEach(function (child) { node.appendChild(child); });
+    return node;
+  }
+
+  function inputFor(value, multiline, id) {
+    var node = document.createElement(multiline ? 'textarea' : 'input');
+    if (!multiline) node.type = 'text';
+    node.id = id;
+    node.value = value === undefined || value === null ? '' : String(value);
+    return node;
+  }
+
+  /** One label plus a Chinese box and, unless untranslatable, an English box. */
+  function renderTextField(key, label, options) {
+    var settings = CONTENT.settings || {};
+    var wrap = el('div', {});
+
+    if (options.translatable === false) {
+      wrap.appendChild(el('label', { text: label, for: 'f_' + key }));
+      wrap.appendChild(inputFor(settings[key], options.multiline, 'f_' + key));
+      return wrap;
+    }
+
+    var row = el('div', { class: 'row' });
+    var zh = el('div', {});
+    zh.appendChild(el('label', { text: label + '（中文）', for: 'f_' + key }));
+    zh.appendChild(inputFor(settings[key], options.multiline, 'f_' + key));
+
+    var en = el('div', {});
+    en.appendChild(el('label', { text: label + '（English，可留空）', for: 'f_' + key + '_en' }));
+    en.appendChild(inputFor(settings[key + '_en'], options.multiline, 'f_' + key + '_en'));
+
+    row.appendChild(zh);
+    row.appendChild(en);
+    wrap.appendChild(row);
+    return wrap;
+  }
+
+  function renderRoomCard(room, index) {
+    var card = el('div', { class: 'card', id: 'room_' + index });
+    card.appendChild(el('h2', { text: '房型 ' + (index + 1) }));
+
+    ROOM_FIELDS.forEach(function (field) {
+      var row = el('div', { class: 'row' });
+
+      var zh = el('div', {});
+      zh.appendChild(el('label', { text: field.label + '（中文）' }));
+      zh.appendChild(inputFor(room[field.column], field.multiline, 'r' + index + '_' + field.column));
+
+      var en = el('div', {});
+      en.appendChild(el('label', { text: field.label + '（English，可留空）' }));
+      en.appendChild(inputFor(room[field.column + '_en'], field.multiline, 'r' + index + '_' + field.column + '_en'));
+
+      row.appendChild(zh);
+      row.appendChild(en);
+      card.appendChild(row);
+    });
+
+    card.appendChild(el('label', { text: '價格（數字；留空顯示破折號）' }));
+    card.appendChild(inputFor(room.price, false, 'r' + index + '_price'));
+
+    card.appendChild(renderPhotoManager('room-' + index, room.photos));
+
+    var remove = el('button', { class: 'btn btn-danger', type: 'button', text: '刪除這個房型' });
+    remove.style.marginTop = '16px';
+    remove.onclick = function () {
+      CONTENT.rooms = collectRooms().filter(function (_, i) { return i !== index; });
+      renderSections();
+    };
+    card.appendChild(remove);
+    return card;
+  }
+
+  function collectRooms() {
+    return (CONTENT.rooms || []).map(function (room, index) {
+      var updated = { photos: room.photos || '' };
+      ROOM_FIELDS.forEach(function (field) {
+        updated[field.column] = document.getElementById('r' + index + '_' + field.column).value;
+        updated[field.column + '_en'] = document.getElementById('r' + index + '_' + field.column + '_en').value;
+      });
+      updated.price = document.getElementById('r' + index + '_price').value;
+      return updated;
+    });
+  }
+
+  function collectPayload() {
+    var settings = {};
+    SECTIONS.forEach(function (section) {
+      section.keys.forEach(function (field) {
+        settings[field.key] = document.getElementById('f_' + field.key).value;
+        if (field.translatable !== false) {
+          settings[field.key + '_en'] = document.getElementById('f_' + field.key + '_en').value;
+        }
+      });
+    });
+    return { settings: settings, rooms: collectRooms() };
+  }
+
+  function save() {
+    runAuth('saveContent');
+    runAuth('saveList');
+    runAuth('reorderPhotos');
+  }
+
+  function uploadPhoto() {
+    runAuth('uploadPhoto');
+  }
+
+  function deletePhoto() {
+    runAuth('deletePhoto');
+  }
+
+  function saveAll() {
+    var button = document.getElementById('saveBtn');
+    var message = document.getElementById('saveMsg');
+    button.disabled = true;
+    setMsg(message, '', '');
+
+    return runAuth('saveContent', collectPayload()).then(function () {
+      setMsg(message, 'ok', '已儲存。公開網站會在訪客下次開啟時更新。');
+      button.disabled = false;
+    }).catch(function (error) {
+      setMsg(message, 'err', '儲存失敗：' + error);
+      button.disabled = false;
+    });
+  }
+
+  function renderSections() {
+    var host = document.getElementById('sections');
+    host.innerHTML = '';
+
+    SECTIONS.forEach(function (section) {
+      var card = el('div', { class: 'card' });
+      card.appendChild(el('h2', { text: section.title }));
+      section.keys.forEach(function (field) {
+        card.appendChild(renderTextField(field.key, field.label, field));
+      });
+      if (section.photos) card.appendChild(renderPhotoManager(section.photos, (CONTENT.settings || {})[section.photos + '_photos']));
+      if (section.title === '周邊景點') {
+        ['1', '2', '3'].forEach(function (n) {
+          card.appendChild(el('label', { text: '景點 ' + n + ' 照片' }));
+          card.appendChild(renderPhotoManager('scenery-' + n, (CONTENT.settings || {})[' scenery' + n + '_photos']));
+        });
+      }
+      host.appendChild(card);
+    });
+
+    var roomsCard = el('div', { class: 'card' });
+    roomsCard.appendChild(el('h2', { text: '房型' }));
+    host.appendChild(roomsCard);
+
+    (CONTENT.rooms || []).forEach(function (room, index) { host.appendChild(renderRoomCard(room, index)); });
+
+    var add = el('button', { class: 'btn btn-ghost', type: 'button', text: '＋ 新增房型' });
+    add.onclick = function () {
+      CONTENT.rooms = collectRooms().concat([{ name: '', description: '', price: '', unit: '', note: '', photos: '' }]);
+      renderSections();
+    };
+    host.appendChild(add);
+
+    renderListEditors(host);
+  }
+
+  /** Filled in by Task 19. */
+  function renderPhotoManager(section, photosValue) { void section; void photosValue; return document.createElement('div'); }
+  /** Filled in by Task 20. */
+  function renderListEditors(host) { void host; }
 
   document.getElementById('loginBtn').onclick = signIn;
   document.getElementById('passcode').addEventListener('keydown', function (event) {
     if (event.key === 'Enter') signIn();
   });
   document.getElementById('reloadBtn').onclick = function () { loadAndRender(); };
-  document.getElementById('saveBtn').onclick = save;
+  document.getElementById('saveBtn').onclick = saveAll;
 
   (function restoreSession() {
     var saved = null;
