@@ -2359,9 +2359,17 @@ reordering silently drops any URL that is not already present."
 
 三份 CSV 匯入試算表後即為初始內容。文字**逐字取自設計稿** `claude_design/彩虹星民宿 Rainbowstar.dc.html`（`RULES` 位於第 504–521 行、`DUTIES_OUT` 522–528、`DUTIES_IN` 529–532、`data-content` 元素散落全檔）。
 
-**兩個例外，須知悉：**
+**三個例外，須知悉：**
+
 1. 房型的 `description`／`unit` 取自 `claude_design/uploads/rainbowstar-site/sheet-template/rooms.csv`。設計稿只為「主屋」提供了 `DEFAULT_ROOMS` 文案，帳棚與車宿沒有描述文字；該 CSV 是唯一來源，且屬事實性資料（非舊版 index.html 的版型內容），因此採用。
 2. `contact_email` 與 `notify_email` 先填佔位地址，部署時（Task 22）改成真實信箱。
+3. **設計稿有兩個中文錯字，種子 CSV 刻意寫成正確的字**。若日後有人拿 CSV 逐字比對設計稿，會看到這三處差異，那是預期的：
+
+   | 位置 | 設計稿 | 種子 CSV | 說明 |
+   |---|---|---|---|
+   | `rules` 第 4 條 | 體**諥**（U+8AE5） | 體**諒**（U+8ADD） | 設計稿錯字 |
+   | `duties_out` 第 2 項 | **濫**水（U+6FEB） | **澆**水（U+6F86） | 設計稿錯字；濫水＝淹水，澆水＝澆灌 |
+   | `rules` 第 6 條英文 | others**’** privacy | others**'** privacy | 彎引號改直引號，與其餘英文一致 |
 
 **Files:**
 - Create: `scripts/csv.js`
