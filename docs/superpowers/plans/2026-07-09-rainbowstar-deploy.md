@@ -1988,9 +1988,14 @@ must not wipe a photo uploaded moments earlier."
   - `readPhotoUrls_(ss, section): string[]`
   - `writePhotoUrls_(ss, section, urls: string[]): void`
   - `folderForSection_(section): Folder` — 於 `PHOTO_ROOT_FOLDER_ID` 下取得或建立同名子資料夾
+  - `trashPhotoFile_(url): void` — 僅在檔案位於 `PHOTO_ROOT_FOLDER_ID` 之下時才移入垃圾桶
   - `uploadPhoto(token, section, filename, base64, mimeType): {ok: true, urls: string[]}`
   - `deletePhoto(token, section, url): {ok: true, urls: string[]}`
   - `reorderPhotos(token, section, orderedUrls): {ok: true, urls: string[]}`
+
+> **⚠️ `deletePhoto` 有兩道獨立的閘，缺一不可。** `assertAuthorized_` 只證明呼叫者持有 token，不代表 `url` 參數可信。若直接把 `fileIdFromUrl_(url)` 的結果拿去 `setTrashed(true)`，任何持有 token 者（含外洩的 token）就能刪掉業者 Drive 裡**任何**檔案——因為過濾試算表清單用的是字串比對，比不中只是無事發生，Drive 那一刀卻照樣砍下去。
+>
+> 因此：(1) 只有當 `url` **確實列在該區塊的照片清單裡**才動 Drive；(2) `trashPhotoFile_` 動手前再用 `isInsidePhotoRoot_` 確認一次。
 
 ---
 
@@ -2070,9 +2075,16 @@ function stubDrive() {
   });
 
   const root = makeFolder('ROOT', 'Rainbowstar Photos');
+  const iterator = (items) => { let i = 0; return { hasNext: () => i < items.length, next: () => items[i++] }; };
+
   global.DriveApp = {
     getFolderById: (id) => (id === 'ROOT' ? root : (() => { throw new Error('no folder ' + id); })()),
-    getFileById: (id) => ({ setTrashed: () => trashed.push(id) }),
+    // By default every file lives under the photo root, so trashPhotoFile_'s
+    // scope check passes. Tests that need a file outside it override this.
+    getFileById: (id) => ({
+      getParents: () => iterator([root]),
+      setTrashed: () => trashed.push(id)
+    }),
     Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
     Permission: { VIEW: 'VIEW' }
   };
@@ -2121,6 +2133,43 @@ test('deletePhoto still updates the sheet when the Drive file is already gone', 
   global.DriveApp.getFileById = () => { throw new Error('gone'); };
 
   assert.deepEqual(code.deletePhoto(token, 'hero', 'a.jpg').urls, ['b.jpg']);
+});
+
+test('deletePhoto will not trash a file the section does not list', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', 'keep.jpg']])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  const drive = stubDrive();
+
+  // A URL naming a real file that simply is not one of this section's photos.
+  const result = code.deletePhoto(token, 'hero', code.photoUrlFor_('SOMEONE_ELSES_FILE'));
+
+  assert.deepEqual(result.urls, ['keep.jpg'], 'the listed photo survives');
+  assert.deepEqual(drive.trashed, [], 'nothing was trashed');
+});
+
+test('deletePhoto will not trash a listed file that lives outside the photo root', () => {
+  const token = authorizedToken();
+  const url = code.photoUrlFor_('OUTSIDE');
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', url]])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  const drive = stubDrive();
+
+  // The file exists and is listed, but its parent chain never reaches the root.
+  const iterator = (items) => { let i = 0; return { hasNext: () => i < items.length, next: () => items[i++] }; };
+  global.DriveApp.getFileById = () => ({
+    getParents: () => iterator([{ getId: () => 'ELSEWHERE', getParents: () => iterator([]) }]),
+    setTrashed: () => drive.trashed.push('OUTSIDE')
+  });
+
+  const result = code.deletePhoto(token, 'hero', url);
+
+  assert.deepEqual(result.urls, [], 'the sheet still forgets the photo');
+  assert.deepEqual(drive.trashed, [], 'but the file outside the photo root is untouched');
 });
 
 test('reorderPhotos keeps only URLs that already exist, in the given order', () => {
@@ -2239,20 +2288,38 @@ function deletePhoto(token, section, url) {
   assertKnownSection_(section);
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var urls = readPhotoUrls_(ss, section).filter(function (existing) { return existing !== url; });
+  var existing = readPhotoUrls_(ss, section);
+
+  // Only ever trash a file this section actually lists. A caller-supplied URL is
+  // an instruction to forget a photo, not a licence to delete an arbitrary file.
+  var isListed = existing.indexOf(url) >= 0;
+  var urls = existing.filter(function (kept) { return kept !== url; });
   writePhotoUrls_(ss, section, urls);
 
-  // Best effort: the sheet is the source of truth, so a missing Drive file is fine.
-  var fileId = fileIdFromUrl_(url);
-  if (fileId) {
-    try {
-      DriveApp.getFileById(fileId).setTrashed(true);
-    } catch (error) {
-      // Already gone, or never ours.
-    }
-  }
-
+  if (isListed) trashPhotoFile_(url);
   return { ok: true, urls: urls };
+}
+
+/**
+ * Trashes the Drive file behind a photo URL, but only if it lives under the
+ * configured photo root.
+ *
+ * Without the scope check, anyone holding an admin token could hand us a URL
+ * naming any file the owner can reach and have it deleted. The sheet is the
+ * source of truth for which photos exist, so a file that has already vanished
+ * is not an error.
+ */
+function trashPhotoFile_(url) {
+  var fileId = fileIdFromUrl_(url);
+  if (!fileId) return;
+
+  try {
+    var file = DriveApp.getFileById(fileId);
+    if (!isInsidePhotoRoot_(file, scriptProperty_('PHOTO_ROOT_FOLDER_ID'))) return;
+    file.setTrashed(true);
+  } catch (error) {
+    // Already gone, or never ours.
+  }
 }
 
 function reorderPhotos(token, section, orderedUrls) {
