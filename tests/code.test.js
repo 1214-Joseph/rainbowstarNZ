@@ -906,3 +906,199 @@ test('sendNotifyEmail_ still sends to the address in notify_email', () => {
   assert.equal(sent.length, 1, 'one email sent');
   assert.equal(sent[0].to, 'owner@example.com', 'email sent to notify_email address');
 });
+
+test('settingsKeyForSection_ maps the hero and scenery sections, and nothing else', () => {
+  assert.equal(code.settingsKeyForSection_('hero'), 'hero_photos');
+  assert.equal(code.settingsKeyForSection_('scenery-2'), 'scenery2_photos');
+  assert.equal(code.settingsKeyForSection_('room-0'), null);
+  assert.equal(code.settingsKeyForSection_('nonsense'), null);
+});
+
+test('readPhotoUrls_ reads the hero list out of settings', () => {
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', 'a.jpg\nb.jpg']])
+  });
+  assert.deepEqual(code.readPhotoUrls_(ss, 'hero'), ['a.jpg', 'b.jpg']);
+});
+
+test('readPhotoUrls_ reads a room photo list by row index', () => {
+  const ss = fakeWritableSpreadsheet({
+    rooms: fakeWritableSheet([['name', 'photos'], ['主屋', 'x.jpg'], ['帳棚', 'y.jpg\nz.jpg']])
+  });
+  assert.deepEqual(code.readPhotoUrls_(ss, 'room-1'), ['y.jpg', 'z.jpg']);
+});
+
+test('readPhotoUrls_ returns an empty array for an out-of-range room', () => {
+  const ss = fakeWritableSpreadsheet({ rooms: fakeWritableSheet([['name', 'photos']]) });
+  assert.deepEqual(code.readPhotoUrls_(ss, 'room-9'), []);
+});
+
+test('writePhotoUrls_ stores the hero list back into settings', () => {
+  const ss = fakeWritableSpreadsheet({ settings: fakeWritableSheet([['key', 'value']]) });
+  code.writePhotoUrls_(ss, 'hero', ['a.jpg', 'b.jpg']);
+  assert.deepEqual(code.readPhotoUrls_(ss, 'hero'), ['a.jpg', 'b.jpg']);
+});
+
+test('writePhotoUrls_ stores a room list without disturbing its neighbour', () => {
+  const ss = fakeWritableSpreadsheet({
+    rooms: fakeWritableSheet([['name', 'photos'], ['主屋', 'x.jpg'], ['帳棚', 'y.jpg']])
+  });
+  code.writePhotoUrls_(ss, 'room-0', ['new.jpg']);
+  assert.deepEqual(code.readPhotoUrls_(ss, 'room-0'), ['new.jpg']);
+  assert.deepEqual(code.readPhotoUrls_(ss, 'room-1'), ['y.jpg']);
+});
+
+/** Minimal DriveApp stand-in: records created files, hands back stable ids. */
+function stubDrive() {
+  const created = [];
+  const subfolders = new Map();
+  const trashed = [];
+
+  const makeFolder = (id, name) => ({
+    getId: () => id,
+    getName: () => name,
+    getFoldersByName: (childName) => {
+      const found = subfolders.get(childName);
+      return { hasNext: () => Boolean(found), next: () => found };
+    },
+    createFolder: (childName) => {
+      const child = makeFolder('FOLDER_' + childName, childName);
+      subfolders.set(childName, child);
+      return child;
+    },
+    createFile: (blob) => {
+      const fileId = 'FILE' + (created.length + 1);
+      const file = {
+        getId: () => fileId,
+        setSharing: () => file,
+        setTrashed: (v) => trashed.push(file.getId()) && file
+      };
+      created.push({ blob, file });
+      return file;
+    }
+  });
+
+  const root = makeFolder('ROOT', 'Rainbowstar Photos');
+  const iterator = (items) => { let i = 0; return { hasNext: () => i < items.length, next: () => items[i++] }; };
+
+  global.DriveApp = {
+    getFolderById: (id) => (id === 'ROOT' ? root : (() => { throw new Error('no folder ' + id); })()),
+    // By default every file lives under the photo root, so trashPhotoFile_'s
+    // scope check passes. Tests that need a file outside it override this.
+    getFileById: (id) => ({
+      getParents: () => iterator([root]),
+      setTrashed: () => trashed.push(id)
+    }),
+    Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
+    Permission: { VIEW: 'VIEW' }
+  };
+  global.Utilities = Object.assign({}, global.Utilities, {
+    base64Decode: (s) => Buffer.from(s, 'base64'),
+    newBlob: (bytes, mimeType, name) => ({ bytes, mimeType, name, setName: () => {} })
+  });
+  return { created, trashed };
+}
+
+test('uploadPhoto appends the new photo URL and returns the whole list', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({ settings: fakeWritableSheet([['key', 'value'], ['hero_photos', 'old.jpg']]) });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  stubDrive();
+
+  const result = code.uploadPhoto(token, 'hero', 'farm.jpg', 'aGVsbG8=', 'image/jpeg');
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.urls, ['old.jpg', code.photoUrlFor_('FILE1')]);
+  assert.deepEqual(code.readPhotoUrls_(ss, 'hero'), result.urls);
+});
+
+test('deletePhoto removes the URL from the sheet and trashes the Drive file', () => {
+  const token = authorizedToken();
+  const url = code.photoUrlFor_('FILE9');
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', 'keep.jpg\n' + url]])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  const drive = stubDrive();
+
+  const result = code.deletePhoto(token, 'hero', url);
+
+  assert.deepEqual(result.urls, ['keep.jpg']);
+  assert.deepEqual(drive.trashed, ['FILE9']);
+});
+
+test('deletePhoto still updates the sheet when the Drive file is already gone', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', 'a.jpg\nb.jpg']])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  stubDrive();
+  global.DriveApp.getFileById = () => { throw new Error('gone'); };
+
+  assert.deepEqual(code.deletePhoto(token, 'hero', 'a.jpg').urls, ['b.jpg']);
+});
+
+test('deletePhoto will not trash a file the section does not list', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', 'keep.jpg']])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  const drive = stubDrive();
+
+  // A URL naming a real file that simply is not one of this section's photos.
+  const result = code.deletePhoto(token, 'hero', code.photoUrlFor_('SOMEONE_ELSES_FILE'));
+
+  assert.deepEqual(result.urls, ['keep.jpg'], 'the listed photo survives');
+  assert.deepEqual(drive.trashed, [], 'nothing was trashed');
+});
+
+test('deletePhoto will not trash a listed file that lives outside the photo root', () => {
+  const token = authorizedToken();
+  const url = code.photoUrlFor_('OUTSIDE');
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', url]])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  const drive = stubDrive();
+
+  // The file exists and is listed, but its parent chain never reaches the root.
+  const iterator = (items) => { let i = 0; return { hasNext: () => i < items.length, next: () => items[i++] }; };
+  global.DriveApp.getFileById = () => ({
+    getParents: () => iterator([{ getId: () => 'ELSEWHERE', getParents: () => iterator([]) }]),
+    setTrashed: () => drive.trashed.push('OUTSIDE')
+  });
+
+  const result = code.deletePhoto(token, 'hero', url);
+
+  assert.deepEqual(result.urls, [], 'the sheet still forgets the photo');
+  assert.deepEqual(drive.trashed, [], 'but the file outside the photo root is untouched');
+});
+
+test('reorderPhotos keeps only URLs that already exist, in the given order', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', 'a.jpg\nb.jpg\nc.jpg']])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  stubDrive();
+
+  const result = code.reorderPhotos(token, 'hero', ['c.jpg', 'a.jpg', 'intruder.jpg']);
+
+  assert.deepEqual(result.urls, ['c.jpg', 'a.jpg']);
+});
+
+test('every photo function refuses an invalid token', () => {
+  authorizedToken();
+  assert.throws(() => code.uploadPhoto('bad', 'hero', 'a.jpg', 'x', 'image/jpeg'), /未授權/);
+  assert.throws(() => code.deletePhoto('bad', 'hero', 'a.jpg'), /未授權/);
+  assert.throws(() => code.reorderPhotos('bad', 'hero', []), /未授權/);
+});
+
+test('uploadPhoto rejects an unknown section rather than writing nowhere', () => {
+  const token = authorizedToken();
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => fakeWritableSpreadsheet({}) };
+  stubDrive();
+  assert.throws(() => code.uploadPhoto(token, 'nonsense', 'a.jpg', 'x', 'image/jpeg'), /未知的區塊/);
+});

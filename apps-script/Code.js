@@ -453,6 +453,130 @@ function doGet(e) {
   }
 }
 
+/** Returns the settings key holding this section's photos, or null for rooms. */
+function settingsKeyForSection_(section) {
+  if (section === 'hero') return 'hero_photos';
+  var scenery = String(section || '').match(/^scenery-([123])$/);
+  if (scenery) return 'scenery' + scenery[1] + '_photos';
+  return null;
+}
+
+function roomIndexForSection_(section) {
+  var room = String(section || '').match(/^room-(\d+)$/);
+  return room ? Number(room[1]) : null;
+}
+
+function assertKnownSection_(section) {
+  if (settingsKeyForSection_(section) === null && roomIndexForSection_(section) === null) {
+    throw new Error('未知的區塊 Unknown section: ' + section);
+  }
+}
+
+function readPhotoUrls_(ss, section) {
+  assertKnownSection_(section);
+
+  var settingsKey = settingsKeyForSection_(section);
+  if (settingsKey) return splitUrls(readSettings_(ss)[settingsKey]);
+
+  var rooms = readRooms_(ss);
+  var room = rooms[roomIndexForSection_(section)];
+  return room ? splitUrls(room.photos) : [];
+}
+
+function writePhotoUrls_(ss, section, urls) {
+  assertKnownSection_(section);
+
+  var settingsKey = settingsKeyForSection_(section);
+  if (settingsKey) {
+    var update = {};
+    update[settingsKey] = joinUrls(urls);
+    upsertSettings_(ss, update);
+    return;
+  }
+
+  var rooms = readRooms_(ss);
+  var index = roomIndexForSection_(section);
+  if (!rooms[index]) throw new Error('房型不存在 Room not found: ' + section);
+  rooms[index].photos = joinUrls(urls);
+  writeRooms_(ss, rooms);
+}
+
+/** Gets, or creates, the section's subfolder beneath the configured photo root. */
+function folderForSection_(section) {
+  var rootFolderId = scriptProperty_('PHOTO_ROOT_FOLDER_ID');
+  if (!rootFolderId) throw new Error('尚未設定 PHOTO_ROOT_FOLDER_ID');
+
+  var root = DriveApp.getFolderById(rootFolderId);
+  var existing = root.getFoldersByName(section);
+  return existing.hasNext() ? existing.next() : root.createFolder(section);
+}
+
+function uploadPhoto(token, section, filename, base64, mimeType) {
+  assertAuthorized_(token);
+  assertKnownSection_(section);
+
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType || 'image/jpeg', filename || 'photo.jpg');
+  var file = folderForSection_(section).createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var urls = readPhotoUrls_(ss, section).concat([photoUrlFor_(file.getId())]);
+  writePhotoUrls_(ss, section, urls);
+
+  return { ok: true, urls: urls };
+}
+
+function deletePhoto(token, section, url) {
+  assertAuthorized_(token);
+  assertKnownSection_(section);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existing = readPhotoUrls_(ss, section);
+
+  // Only ever trash a file this section actually lists. A caller-supplied URL is
+  // an instruction to forget a photo, not a licence to delete an arbitrary file.
+  var isListed = existing.indexOf(url) >= 0;
+  var urls = existing.filter(function (kept) { return kept !== url; });
+  writePhotoUrls_(ss, section, urls);
+
+  if (isListed) trashPhotoFile_(url);
+  return { ok: true, urls: urls };
+}
+
+/**
+ * Trashes the Drive file behind a photo URL, but only if it lives under the
+ * configured photo root.
+ *
+ * Without the scope check, anyone holding an admin token could hand us a URL
+ * naming any file the owner can reach and have it deleted. The sheet is the
+ * source of truth for which photos exist, so a file that has already vanished
+ * is not an error.
+ */
+function trashPhotoFile_(url) {
+  var fileId = fileIdFromUrl_(url);
+  if (!fileId) return;
+
+  try {
+    var file = DriveApp.getFileById(fileId);
+    if (!isInsidePhotoRoot_(file, scriptProperty_('PHOTO_ROOT_FOLDER_ID'))) return;
+    file.setTrashed(true);
+  } catch (error) {
+    // Already gone, or never ours.
+  }
+}
+
+function reorderPhotos(token, section, orderedUrls) {
+  assertAuthorized_(token);
+  assertKnownSection_(section);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existing = readPhotoUrls_(ss, section);
+  var urls = (orderedUrls || []).filter(function (url) { return existing.indexOf(url) >= 0; });
+
+  writePhotoUrls_(ss, section, urls);
+  return { ok: true, urls: urls };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   var lib = require('./lib.js');
   Object.assign(global, lib);
@@ -488,6 +612,14 @@ if (typeof module !== 'undefined' && module.exports) {
     photoUrlFor_: photoUrlFor_,
     fileIdFromUrl_: fileIdFromUrl_,
     isInsidePhotoRoot_: isInsidePhotoRoot_,
+    settingsKeyForSection_: settingsKeyForSection_,
+    roomIndexForSection_: roomIndexForSection_,
+    readPhotoUrls_: readPhotoUrls_,
+    writePhotoUrls_: writePhotoUrls_,
+    folderForSection_: folderForSection_,
+    uploadPhoto: uploadPhoto,
+    deletePhoto: deletePhoto,
+    reorderPhotos: reorderPhotos,
     doGet: doGet,
     __lib: lib
   };
