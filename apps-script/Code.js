@@ -190,6 +190,25 @@ function scriptProperty_(key) {
 }
 
 /**
+ * Computes a hex fingerprint of a passcode for token validation.
+ *
+ * Returns an empty string for an absent or empty passcode.
+ * Otherwise returns a hex string computed via SHA-256 digest.
+ * Each signed byte is masked with & 0xff before converting to hex.
+ */
+function passcodeFingerprint_(passcode) {
+  if (!passcode) return '';
+
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(passcode));
+  var hex = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var byte = bytes[i] & 0xff;
+    hex += (byte < 16 ? '0' : '') + byte.toString(16);
+  }
+  return hex;
+}
+
+/**
  * The only admin function that does not require a token.
  *
  * A shared passcode buys a short-lived session token that lives in the script
@@ -200,7 +219,8 @@ function verifyPasscode(passcode) {
   if (!expected || !passcode || String(passcode) !== String(expected)) return { ok: false };
 
   var token = Utilities.getUuid();
-  CacheService.getScriptCache().put('admin_token_' + token, '1', ADMIN_TOKEN_TTL_SECONDS);
+  var fingerprint = passcodeFingerprint_(expected);
+  CacheService.getScriptCache().put('admin_token_' + token, fingerprint, ADMIN_TOKEN_TTL_SECONDS);
   return { ok: true, token: token };
 }
 
@@ -210,11 +230,40 @@ function verifyPasscode(passcode) {
  * The web app is deployed for "Anyone", so any visitor who loads ?page=admin can
  * invoke these functions straight from the browser console. Same origin is not
  * authorisation.
+ *
+ * A token is valid only if:
+ * 1. It is not falsy
+ * 2. It exists in the cache
+ * 3. ADMIN_PASSCODE is currently set
+ * 4. The cached value matches the fingerprint of the current ADMIN_PASSCODE
  */
 function assertAuthorized_(token) {
-  if (!token || !CacheService.getScriptCache().get('admin_token_' + token)) {
+  if (!token) {
     throw new Error('未授權 Unauthorized');
   }
+
+  var currentPasscode = scriptProperty_('ADMIN_PASSCODE');
+  if (!currentPasscode) {
+    throw new Error('未授權 Unauthorized');
+  }
+
+  var currentFingerprint = passcodeFingerprint_(currentPasscode);
+  var cachedValue = CacheService.getScriptCache().get('admin_token_' + token);
+
+  if (!cachedValue || cachedValue !== currentFingerprint) {
+    throw new Error('未授權 Unauthorized');
+  }
+}
+
+/**
+ * Revokes a token by removing it from the cache.
+ *
+ * Returns {ok: true} whether the token existed or not.
+ * No passcode or authorization required; knowing a token is sufficient to discard it.
+ */
+function revokeToken(token) {
+  CacheService.getScriptCache().remove('admin_token_' + token);
+  return { ok: true };
 }
 
 function photoUrlFor_(fileId) {
@@ -314,9 +363,11 @@ if (typeof module !== 'undefined' && module.exports) {
     handlePost_: handlePost_,
     verifyPasscode: verifyPasscode,
     assertAuthorized_: assertAuthorized_,
+    revokeToken: revokeToken,
     photoUrlFor_: photoUrlFor_,
     fileIdFromUrl_: fileIdFromUrl_,
     isInsidePhotoRoot_: isInsidePhotoRoot_,
+    doGet: doGet,
     __lib: lib
   };
 }

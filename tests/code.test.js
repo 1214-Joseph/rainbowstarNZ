@@ -393,10 +393,26 @@ function stubCache() {
   return store;
 }
 
+/** Helper to stub Utilities with a fake digest that returns deterministic bytes including negatives. */
+function stubUtilities() {
+  global.Utilities = {
+    getUuid: () => 'uuid-1',
+    computeDigest: function(algo, input) {
+      // Fake digest that returns 32 bytes with at least one negative
+      const bytes = [];
+      for (let i = 0; i < 32; i++) {
+        bytes.push((input.charCodeAt(i % input.length) + i) % 256 - 128);
+      }
+      return bytes;
+    },
+    DigestAlgorithm: { SHA_256: 'sha256' }
+  };
+}
+
 test('verifyPasscode rejects a wrong passcode and issues no token', () => {
   stubScriptProperties({ ADMIN_PASSCODE: 'letmein' });
   stubCache();
-  global.Utilities = { getUuid: () => 'uuid-1' };
+  stubUtilities();
 
   assert.deepEqual(code.verifyPasscode('wrong'), { ok: false });
 });
@@ -404,7 +420,7 @@ test('verifyPasscode rejects a wrong passcode and issues no token', () => {
 test('verifyPasscode rejects everything when no passcode is configured', () => {
   stubScriptProperties({});
   stubCache();
-  global.Utilities = { getUuid: () => 'uuid-1' };
+  stubUtilities();
 
   assert.deepEqual(code.verifyPasscode(''), { ok: false });
   assert.deepEqual(code.verifyPasscode('anything'), { ok: false });
@@ -413,7 +429,7 @@ test('verifyPasscode rejects everything when no passcode is configured', () => {
 test('verifyPasscode issues a token that assertAuthorized_ then accepts', () => {
   stubScriptProperties({ ADMIN_PASSCODE: 'letmein' });
   stubCache();
-  global.Utilities = { getUuid: () => 'uuid-1' };
+  stubUtilities();
 
   const result = code.verifyPasscode('letmein');
   assert.equal(result.ok, true);
@@ -424,6 +440,7 @@ test('verifyPasscode issues a token that assertAuthorized_ then accepts', () => 
 test('assertAuthorized_ throws for an unknown, empty or null token', () => {
   stubScriptProperties({ ADMIN_PASSCODE: 'letmein' });
   stubCache();
+  stubUtilities();
 
   assert.throws(() => code.assertAuthorized_('nope'), /未授權/);
   assert.throws(() => code.assertAuthorized_(''), /未授權/);
@@ -464,3 +481,175 @@ function iterator(items) {
   let i = 0;
   return { hasNext: () => i < items.length, next: () => items[i++] };
 }
+
+// ============================================================================
+// Fix: token revocation and doGet coverage
+// ============================================================================
+
+test('a token minted under passcode A is rejected after ADMIN_PASSCODE changes to B', () => {
+  stubScriptProperties({ ADMIN_PASSCODE: 'passcode-a' });
+  stubCache();
+  stubUtilities();
+
+  const result1 = code.verifyPasscode('passcode-a');
+  assert.equal(result1.ok, true);
+
+  // Change the passcode
+  stubScriptProperties({ ADMIN_PASSCODE: 'passcode-b' });
+
+  // Token should now be rejected
+  assert.throws(() => code.assertAuthorized_('uuid-1'), /未授權/);
+});
+
+test('a token minted under passcode A is still accepted while ADMIN_PASSCODE is still A', () => {
+  stubScriptProperties({ ADMIN_PASSCODE: 'passcode-a' });
+  stubCache();
+  stubUtilities();
+
+  const result = code.verifyPasscode('passcode-a');
+  assert.equal(result.ok, true);
+
+  // Passcode hasn't changed; token should still work
+  assert.doesNotThrow(() => code.assertAuthorized_('uuid-1'));
+});
+
+test('assertAuthorized_ throws when ADMIN_PASSCODE has been removed, even for a cached token', () => {
+  stubScriptProperties({ ADMIN_PASSCODE: 'passcode-a' });
+  stubCache();
+  stubUtilities();
+
+  const result = code.verifyPasscode('passcode-a');
+  assert.equal(result.ok, true);
+
+  // Remove the passcode
+  stubScriptProperties({});
+
+  // Token should now be rejected because passcode is gone
+  assert.throws(() => code.assertAuthorized_('uuid-1'), /未授權/);
+});
+
+test('revokeToken removes a token and makes it invalid', () => {
+  stubScriptProperties({ ADMIN_PASSCODE: 'passcode-a' });
+  stubCache();
+  stubUtilities();
+
+  const result = code.verifyPasscode('passcode-a');
+  assert.equal(result.ok, true);
+  assert.doesNotThrow(() => code.assertAuthorized_('uuid-1'));
+
+  // Revoke the token
+  const revokeResult = code.revokeToken('uuid-1');
+  assert.deepEqual(revokeResult, { ok: true });
+
+  // Token should now be rejected
+  assert.throws(() => code.assertAuthorized_('uuid-1'), /未授權/);
+});
+
+test('revokeToken returns {ok:true} for a token that was never valid', () => {
+  stubCache();
+  stubUtilities();
+
+  const revokeResult = code.revokeToken('never-existed');
+  assert.deepEqual(revokeResult, { ok: true });
+});
+
+test('passcodeFingerprint_ is deterministic and differs for different passcodes', () => {
+  stubScriptProperties({ ADMIN_PASSCODE: 'passcode-a' });
+  const cache1 = stubCache();
+  stubUtilities();
+
+  const result1 = code.verifyPasscode('passcode-a');
+  const cachedValue1 = cache1.get('admin_token_uuid-1');
+
+  stubScriptProperties({ ADMIN_PASSCODE: 'passcode-b' });
+  const cache2 = stubCache();
+  stubUtilities();
+
+  const result2 = code.verifyPasscode('passcode-b');
+  const cachedValue2 = cache2.get('admin_token_uuid-1');
+
+  // Both should be hex strings
+  assert.equal(typeof cachedValue1, 'string');
+  assert.equal(typeof cachedValue2, 'string');
+  // Hex strings should match pattern (2 chars per byte)
+  assert.match(cachedValue1, /^[0-9a-f]+$/);
+  assert.match(cachedValue2, /^[0-9a-f]+$/);
+  // Different passcodes should produce different fingerprints
+  assert.notEqual(cachedValue1, cachedValue2);
+});
+
+test('doGet with page=admin returns whatever serveAdmin_ produces', () => {
+  stubUtilities();
+  const adminHtml = '<html>Admin Panel</html>';
+  global.HtmlService = {
+    createTemplateFromFile: (name) => ({
+      evaluate: () => ({
+        setTitle: (title) => ({
+          addMetaTag: (name, content) => adminHtml
+        })
+      })
+    })
+  };
+
+  const result = code.doGet({ parameter: { page: 'admin' } });
+  assert.equal(result, adminHtml);
+});
+
+test('doGet with img=<id> reaches serveImage_ and returns "Not found" for files outside photo root', () => {
+  stubUtilities();
+  stubScriptProperties({ PHOTO_ROOT_FOLDER_ID: 'ROOT' });
+  global.DriveApp = {
+    getFileById: () => ({
+      getParents: () => iterator([])
+    })
+  };
+  global.ContentService = {
+    createTextOutput: (text) => ({
+      setMimeType: (mime) => text
+    }),
+    MimeType: { TEXT: 'text/plain' }
+  };
+
+  const result = code.doGet({ parameter: { img: 'some-file-id' } });
+  assert.equal(result, 'Not found');
+});
+
+test('doGet with no parameters returns content JSON with ok:true and generatedAt', () => {
+  stubUtilities();
+  const ss = fakeSpreadsheet({
+    settings: fakeSheet([['key', 'value']]),
+    rooms: fakeSheet([['name'], ['room1']]),
+    workexchange_lists: fakeSheet([['list', 'order', 'text_zh', 'text_en']])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  global.ContentService = {
+    createTextOutput: (json) => ({
+      setMimeType: (mime) => JSON.parse(json)
+    }),
+    MimeType: { JSON: 'application/json' }
+  };
+
+  const result = code.doGet({ parameter: {} });
+  assert.equal(result.ok, true);
+  assert.ok(result.generatedAt, 'generatedAt field is present');
+  assert.ok(typeof result.generatedAt === 'string', 'generatedAt is a string');
+});
+
+test('doGet with no parameters returns ok:false when buildContentPayload_ throws', () => {
+  stubUtilities();
+  global.SpreadsheetApp = {
+    getActiveSpreadsheet: () => {
+      throw new Error('Spreadsheet access failed');
+    }
+  };
+  global.ContentService = {
+    createTextOutput: (json) => ({
+      setMimeType: (mime) => JSON.parse(json)
+    }),
+    MimeType: { JSON: 'application/json' }
+  };
+
+  const result = code.doGet({ parameter: {} });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Spreadsheet access failed/);
+});
