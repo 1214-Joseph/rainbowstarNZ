@@ -182,6 +182,117 @@ function jsonOutput_(payload) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+var ADMIN_TOKEN_TTL_SECONDS = 6 * 60 * 60;
+var PHOTO_CDN_PREFIX = 'https://lh3.googleusercontent.com/d/';
+
+function scriptProperty_(key) {
+  return PropertiesService.getScriptProperties().getProperty(key);
+}
+
+/**
+ * The only admin function that does not require a token.
+ *
+ * A shared passcode buys a short-lived session token that lives in the script
+ * cache, so the passcode itself is not replayed on every later call.
+ */
+function verifyPasscode(passcode) {
+  var expected = scriptProperty_('ADMIN_PASSCODE');
+  if (!expected || !passcode || String(passcode) !== String(expected)) return { ok: false };
+
+  var token = Utilities.getUuid();
+  CacheService.getScriptCache().put('admin_token_' + token, '1', ADMIN_TOKEN_TTL_SECONDS);
+  return { ok: true, token: token };
+}
+
+/**
+ * Every other google.script.run function must call this first.
+ *
+ * The web app is deployed for "Anyone", so any visitor who loads ?page=admin can
+ * invoke these functions straight from the browser console. Same origin is not
+ * authorisation.
+ */
+function assertAuthorized_(token) {
+  if (!token || !CacheService.getScriptCache().get('admin_token_' + token)) {
+    throw new Error('未授權 Unauthorized');
+  }
+}
+
+function photoUrlFor_(fileId) {
+  return PHOTO_CDN_PREFIX + fileId + '=w1600';
+}
+
+function fileIdFromUrl_(url) {
+  var value = String(url || '');
+  var cdn = value.indexOf(PHOTO_CDN_PREFIX);
+  if (cdn === 0) return value.slice(PHOTO_CDN_PREFIX.length).split('=')[0] || null;
+
+  var proxy = value.match(/[?&]img=([^&]+)/);
+  if (proxy) return proxy[1];
+
+  return null;
+}
+
+/** Walks a file's parent chain looking for the configured photo root folder. */
+function isInsidePhotoRoot_(file, rootFolderId) {
+  if (!rootFolderId) return false;
+
+  var seen = {};
+  var queue = [];
+  var parents = file.getParents();
+  while (parents.hasNext()) queue.push(parents.next());
+
+  while (queue.length) {
+    var folder = queue.shift();
+    var id = folder.getId();
+    if (id === rootFolderId) return true;
+    if (seen[id]) continue;
+    seen[id] = true;
+
+    var grandparents = folder.getParents();
+    while (grandparents.hasNext()) queue.push(grandparents.next());
+  }
+  return false;
+}
+
+/**
+ * Serves a photo's bytes. Scoped to the photo folder on purpose: without this
+ * check the endpoint would proxy any Drive file the owner can read.
+ */
+function serveImage_(fileId) {
+  var rootFolderId = scriptProperty_('PHOTO_ROOT_FOLDER_ID');
+  try {
+    var file = DriveApp.getFileById(fileId);
+    if (!isInsidePhotoRoot_(file, rootFolderId)) {
+      return ContentService.createTextOutput('Not found').setMimeType(ContentService.MimeType.TEXT);
+    }
+    return file.getBlob();
+  } catch (error) {
+    return ContentService.createTextOutput('Not found').setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+function serveAdmin_() {
+  return HtmlService.createTemplateFromFile('Admin')
+    .evaluate()
+    .setTitle('彩虹星民宿 — 網站後台')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function doGet(e) {
+  var parameter = (e && e.parameter) || {};
+
+  if (parameter.page === 'admin') return serveAdmin_();
+  if (parameter.img) return serveImage_(parameter.img);
+
+  try {
+    var payload = buildContentPayload_(SpreadsheetApp.getActiveSpreadsheet());
+    payload.generatedAt = new Date().toISOString();
+    return jsonOutput_(payload);
+  } catch (error) {
+    return jsonOutput_({ ok: false, error: String(error) });
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   var lib = require('./lib.js');
   Object.assign(global, lib);
@@ -201,6 +312,11 @@ if (typeof module !== 'undefined' && module.exports) {
     sendNotifyEmail_: sendNotifyEmail_,
     logError_: logError_,
     handlePost_: handlePost_,
+    verifyPasscode: verifyPasscode,
+    assertAuthorized_: assertAuthorized_,
+    photoUrlFor_: photoUrlFor_,
+    fileIdFromUrl_: fileIdFromUrl_,
+    isInsidePhotoRoot_: isInsidePhotoRoot_,
     __lib: lib
   };
 }

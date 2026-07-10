@@ -374,3 +374,93 @@ test('a submission with no type field does not log an error', () => {
   const errorSheet = ss.getSheetByName('errors');
   assert.equal(errorSheet, null, 'no errors sheet was created');
 });
+
+function stubScriptProperties(props) {
+  global.PropertiesService = {
+    getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null) })
+  };
+}
+
+function stubCache() {
+  const store = new Map();
+  global.CacheService = {
+    getScriptCache: () => ({
+      put: (k, v) => store.set(k, v),
+      get: (k) => (store.has(k) ? store.get(k) : null),
+      remove: (k) => store.delete(k)
+    })
+  };
+  return store;
+}
+
+test('verifyPasscode rejects a wrong passcode and issues no token', () => {
+  stubScriptProperties({ ADMIN_PASSCODE: 'letmein' });
+  stubCache();
+  global.Utilities = { getUuid: () => 'uuid-1' };
+
+  assert.deepEqual(code.verifyPasscode('wrong'), { ok: false });
+});
+
+test('verifyPasscode rejects everything when no passcode is configured', () => {
+  stubScriptProperties({});
+  stubCache();
+  global.Utilities = { getUuid: () => 'uuid-1' };
+
+  assert.deepEqual(code.verifyPasscode(''), { ok: false });
+  assert.deepEqual(code.verifyPasscode('anything'), { ok: false });
+});
+
+test('verifyPasscode issues a token that assertAuthorized_ then accepts', () => {
+  stubScriptProperties({ ADMIN_PASSCODE: 'letmein' });
+  stubCache();
+  global.Utilities = { getUuid: () => 'uuid-1' };
+
+  const result = code.verifyPasscode('letmein');
+  assert.equal(result.ok, true);
+  assert.equal(result.token, 'uuid-1');
+  assert.doesNotThrow(() => code.assertAuthorized_('uuid-1'));
+});
+
+test('assertAuthorized_ throws for an unknown, empty or null token', () => {
+  stubScriptProperties({ ADMIN_PASSCODE: 'letmein' });
+  stubCache();
+
+  assert.throws(() => code.assertAuthorized_('nope'), /未授權/);
+  assert.throws(() => code.assertAuthorized_(''), /未授權/);
+  assert.throws(() => code.assertAuthorized_(null), /未授權/);
+});
+
+test('photoUrlFor_ builds a Google CDN link and fileIdFromUrl_ reverses it', () => {
+  const url = code.photoUrlFor_('FILE123');
+  assert.equal(url, 'https://lh3.googleusercontent.com/d/FILE123=w1600');
+  assert.equal(code.fileIdFromUrl_(url), 'FILE123');
+});
+
+test('fileIdFromUrl_ also reads the proxy form and returns null for anything else', () => {
+  assert.equal(code.fileIdFromUrl_('https://script.google.com/macros/s/AKfy/exec?img=FILE123'), 'FILE123');
+  assert.equal(code.fileIdFromUrl_('https://example.com/cat.jpg'), null);
+  assert.equal(code.fileIdFromUrl_(''), null);
+});
+
+test('isInsidePhotoRoot_ accepts a file whose parent chain reaches the photo root', () => {
+  const root = { getId: () => 'ROOT' };
+  const sub = { getId: () => 'SUB', getParents: () => iterator([root]) };
+  const file = { getParents: () => iterator([sub]) };
+  assert.equal(code.isInsidePhotoRoot_(file, 'ROOT'), true);
+});
+
+test('isInsidePhotoRoot_ rejects a file living anywhere else in Drive', () => {
+  const elsewhere = { getId: () => 'PRIVATE', getParents: () => iterator([]) };
+  const file = { getParents: () => iterator([elsewhere]) };
+  assert.equal(code.isInsidePhotoRoot_(file, 'ROOT'), false);
+});
+
+test('isInsidePhotoRoot_ rejects an orphan file with no parents', () => {
+  assert.equal(code.isInsidePhotoRoot_({ getParents: () => iterator([]) }, 'ROOT'), false);
+});
+
+/** Mimics Apps Script's FolderIterator. */
+function iterator(items) {
+  let i = 0;
+  return { hasNext: () => i < items.length, next: () => items[i++] };
+}
