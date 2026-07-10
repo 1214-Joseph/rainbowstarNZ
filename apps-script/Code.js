@@ -75,8 +75,85 @@ function buildContentPayload_(ss) {
   };
 }
 
+/**
+ * Appends one submission. Creates the tab on first use, and repairs the header
+ * row whenever it no longer matches the field list, so a later reordering of
+ * ACCOM_FIELDS cannot silently misalign every column.
+ */
+function appendResponse_(ss, sheetName, fields, get, timestamp, flag) {
+  var sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
+  var expectedHeader = buildHeaderRow(fields);
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(expectedHeader);
+  } else {
+    var existingHeader = sheet.getDataRange().getValues()[0];
+    if (headerNeedsUpdate(existingHeader, expectedHeader)) {
+      sheet.getRange(1, 1, 1, expectedHeader.length).setValues([expectedHeader]);
+    }
+  }
+
+  sheet.appendRow(buildResponseRow(fields, get, timestamp, flag));
+}
+
+function sendNotifyEmail_(settings, type, fields, get, flag) {
+  var to = String(settings.notify_email || Session.getEffectiveUser().getEmail() || '').trim();
+  if (!to) return;
+
+  var options = {};
+  var replyTo = String(get('email') || '').trim();
+  if (isValidEmail(replyTo)) options.replyTo = replyTo;
+
+  MailApp.sendEmail(to, buildEmailSubject(type, get, flag), buildEmailBody(type, fields, get, flag), options);
+}
+
+/**
+ * The testable core of doPost.
+ *
+ * It never rejects. The visitor may be posting with mode:'no-cors', in which
+ * case the browser cannot read this result at all and would report success
+ * regardless — so a rejection here would silently lose a real enquiry.
+ */
+function handlePost_(ss, e, timestamp) {
+  var parameter = (e && e.parameter) || {};
+  var parameters = (e && e.parameters) || {};
+
+  var type = parameter.type === 'workexchange' ? 'workexchange' : 'accommodation';
+  var fields = type === 'workexchange' ? WORK_FIELDS : ACCOM_FIELDS;
+  var sheetName = type === 'workexchange' ? SHEET_WORK : SHEET_STAY;
+
+  var get = function (key) { return joinMultiValue(parameters, parameter, key); };
+
+  try {
+    var flag = checkSuspicious(get);
+    appendResponse_(ss, sheetName, fields, get, timestamp, flag);
+
+    // Email is best effort. A quota error must never lose the recorded row.
+    try {
+      sendNotifyEmail_(readSettings_(ss), type, fields, get, flag);
+    } catch (mailError) {
+      // Intentionally swallowed; the row is already safe in the sheet.
+    }
+
+    return { ok: true, message: '申請已送出 / Application received' };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  return jsonOutput_(handlePost_(ss, e, new Date()));
+}
+
+function jsonOutput_(payload) {
+  return ContentService.createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  Object.assign(global, require('./lib.js'));
+  var lib = require('./lib.js');
+  Object.assign(global, lib);
   module.exports = {
     SHEET_SETTINGS: SHEET_SETTINGS,
     SHEET_ROOMS: SHEET_ROOMS,
@@ -87,6 +164,10 @@ if (typeof module !== 'undefined' && module.exports) {
     readTableRows_: readTableRows_,
     readRooms_: readRooms_,
     readListRows_: readListRows_,
-    buildContentPayload_: buildContentPayload_
+    buildContentPayload_: buildContentPayload_,
+    appendResponse_: appendResponse_,
+    sendNotifyEmail_: sendNotifyEmail_,
+    handlePost_: handlePost_,
+    __lib: lib
   };
 }
