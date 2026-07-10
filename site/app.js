@@ -735,6 +735,14 @@ var Rainbowstar = (function () {
     }
     if (hasField(form, 'guests') && !(parseInt(fieldValue(form, 'guests'), 10) >= 1)) bad('guests', '入住人數請填寫數字', 'Please enter a valid number of guests');
 
+    if (hasField(form, 'checkin')) {
+      var checkinVal = fieldValue(form, 'checkin');
+      if (!checkinVal) bad('checkin', '請選擇入住日期', 'Please choose a check-in date');
+    }
+    if (hasField(form, 'checkout')) {
+      var checkoutVal = fieldValue(form, 'checkout');
+      if (!checkoutVal) bad('checkout', '請選擇退房日期', 'Please choose a check-out date');
+    }
     if (hasField(form, 'checkin') && hasField(form, 'checkout')) {
       var checkin = fieldValue(form, 'checkin');
       var checkout = fieldValue(form, 'checkout');
@@ -752,6 +760,14 @@ var Rainbowstar = (function () {
       var age = parseInt(fieldValue(form, 'age'), 10);
       if (!(age >= 10 && age <= 99)) bad('age', '年齡請填寫正確', 'Please enter a valid age');
     }
+    if (hasField(form, 'start_date')) {
+      var startVal = fieldValue(form, 'start_date');
+      if (!startVal) bad('start_date', '請選擇開始日期', 'Please choose a start date');
+    }
+    if (hasField(form, 'end_date')) {
+      var endVal = fieldValue(form, 'end_date');
+      if (!endVal) bad('end_date', '請選擇結束日期', 'Please choose an end date');
+    }
     if (hasField(form, 'start_date') && hasField(form, 'end_date')) {
       var start = fieldValue(form, 'start_date');
       var end = fieldValue(form, 'end_date');
@@ -759,7 +775,9 @@ var Rainbowstar = (function () {
     }
     if (hasField(form, 'birthday')) {
       var birthday = fieldValue(form, 'birthday');
-      if (birthday) {
+      if (!birthday) {
+        bad('birthday', '請輸入出生日期', 'Please enter your date of birth');
+      } else {
         var born = new Date(birthday);
         var years = (Date.now() - born.getTime()) / 31557600000;
         if (born > new Date() || years > 120) bad('birthday', '出生日期不正確', 'Date of birth is invalid');
@@ -769,15 +787,7 @@ var Rainbowstar = (function () {
   }
 
   function buildFormBody(form) {
-    // Handle fake forms in tests that have a 'fields' array
-    if (form.fields) {
-      var params = new URLSearchParams();
-      form.fields.forEach(function(field) {
-        params.append(field.name, field.value);
-      });
-      return params;
-    }
-    if (typeof FormData === 'undefined') return '';
+    if (typeof HTMLFormElement === 'undefined' || !(form instanceof HTMLFormElement)) return new URLSearchParams();
     return new URLSearchParams(new FormData(form));
   }
 
@@ -934,6 +944,7 @@ var Rainbowstar = (function () {
     applySceneryPhotos: applySceneryPhotos,
     SUBMIT_MODE: SUBMIT_MODE,
     validate: validate,
+    buildFormBody: buildFormBody,
     submitForm: submitForm,
     attachSubmit: attachSubmit,
     setType: setType,

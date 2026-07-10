@@ -339,3 +339,51 @@ test('submitForm in opaque mode assumes success, which is the whole reason reada
   );
   assert.equal(result.ok, true);
 });
+
+test('validate rejects a blank checkout when checkin is filled', () => {
+  const form = fakeForm({ checkin: '2026-08-01', checkout: '' });
+  assert.ok(namesOf(app.validate(form)).includes('checkout'));
+});
+
+test('validate rejects a blank checkin field when present', () => {
+  const form = fakeForm({ checkin: '', checkout: '2026-08-05' });
+  assert.ok(namesOf(app.validate(form)).includes('checkin'));
+});
+
+test('validate rejects a blank end_date when start_date is filled', () => {
+  const form = fakeForm({ start_date: '2026-08-01', end_date: '' });
+  assert.ok(namesOf(app.validate(form)).includes('end_date'));
+});
+
+test('validate rejects a blank start_date field when present', () => {
+  const form = fakeForm({ start_date: '', end_date: '2026-08-05' });
+  assert.ok(namesOf(app.validate(form)).includes('start_date'));
+});
+
+test('validate rejects a blank birthday field when present', () => {
+  const form = fakeForm({ birthday: '' });
+  assert.ok(namesOf(app.validate(form)).includes('birthday'));
+});
+
+test('validate does not reject blank date fields when the form has none of them', () => {
+  const form = fakeForm({ name_en: 'John Doe' });
+  const errors = app.validate(form);
+  assert.ok(!namesOf(errors).includes('checkin'));
+  assert.ok(!namesOf(errors).includes('checkout'));
+  assert.ok(!namesOf(errors).includes('start_date'));
+  assert.ok(!namesOf(errors).includes('end_date'));
+  assert.ok(!namesOf(errors).includes('birthday'));
+});
+
+test('validate preserves the existing checkout-before-checkin check when both are filled', () => {
+  const form = fakeForm({ checkin: '2026-08-05', checkout: '2026-08-01' });
+  assert.ok(namesOf(app.validate(form)).includes('checkout'));
+});
+
+test('buildFormBody returns an empty URLSearchParams for non-form objects without throwing', () => {
+  const result1 = app.buildFormBody({});
+  assert.ok(result1 instanceof URLSearchParams);
+
+  const result2 = app.buildFormBody(null);
+  assert.ok(result2 instanceof URLSearchParams);
+});
