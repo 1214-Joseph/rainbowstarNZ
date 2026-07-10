@@ -787,3 +787,122 @@ test('saveList rejects an unknown list name', () => {
   global.SpreadsheetApp = { getActiveSpreadsheet: () => fakeWritableSpreadsheet({}) };
   assert.throws(() => code.saveList(token, 'nonsense', []), /未知的清單/);
 });
+
+// ============================================================================
+// Fix: stop publishing the owner's notification address
+// ============================================================================
+
+test('PRIVATE_SETTINGS_KEYS is exported and contains notify_email', () => {
+  assert.ok(code.PRIVATE_SETTINGS_KEYS);
+  assert.ok(Array.isArray(code.PRIVATE_SETTINGS_KEYS));
+  assert.ok(code.PRIVATE_SETTINGS_KEYS.indexOf('notify_email') >= 0);
+});
+
+test('buildContentPayload_(ss) without second argument omits notify_email but keeps contact_email and site_name', () => {
+  const ss = fakeSpreadsheet({
+    settings: fakeSheet([
+      ['key', 'value'],
+      ['site_name', 'Rainbowstar'],
+      ['contact_email', 'public@example.com'],
+      ['notify_email', 'owner@example.com']
+    ]),
+    rooms: fakeSheet([['name']]),
+    workexchange_lists: fakeSheet([['list', 'order', 'text_zh', 'text_en']])
+  });
+  const payload = code.buildContentPayload_(ss);
+  assert.equal(payload.settings.site_name, 'Rainbowstar', 'site_name is present');
+  assert.equal(payload.settings.contact_email, 'public@example.com', 'contact_email is present');
+  assert.equal(payload.settings.notify_email, undefined, 'notify_email is omitted');
+});
+
+test('buildContentPayload_(ss, true) includes notify_email', () => {
+  const ss = fakeSpreadsheet({
+    settings: fakeSheet([
+      ['key', 'value'],
+      ['site_name', 'Rainbowstar'],
+      ['notify_email', 'owner@example.com']
+    ]),
+    rooms: fakeSheet([['name']]),
+    workexchange_lists: fakeSheet([['list', 'order', 'text_zh', 'text_en']])
+  });
+  const payload = code.buildContentPayload_(ss, true);
+  assert.equal(payload.settings.site_name, 'Rainbowstar');
+  assert.equal(payload.settings.notify_email, 'owner@example.com', 'notify_email is present');
+});
+
+test('buildContentPayload_(ss) does not mutate what readSettings_(ss) returns', () => {
+  const ss = fakeSpreadsheet({
+    settings: fakeSheet([
+      ['key', 'value'],
+      ['site_name', 'Rainbowstar'],
+      ['notify_email', 'owner@example.com']
+    ]),
+    rooms: fakeSheet([['name']]),
+    workexchange_lists: fakeSheet([['list', 'order', 'text_zh', 'text_en']])
+  });
+
+  // Call buildContentPayload_ which filters notify_email
+  const payload = code.buildContentPayload_(ss);
+  assert.equal(payload.settings.notify_email, undefined, 'filtered payload has no notify_email');
+
+  // Read the settings again directly
+  const freshSettings = code.readSettings_(ss);
+  assert.equal(freshSettings.notify_email, 'owner@example.com', 'fresh read still has notify_email');
+});
+
+test('doGet with no parameters returns JSON whose settings has no notify_email', () => {
+  const ss = fakeSpreadsheet({
+    settings: fakeSheet([
+      ['key', 'value'],
+      ['site_name', 'Rainbowstar'],
+      ['notify_email', 'owner@example.com'],
+      ['contact_email', 'public@example.com']
+    ]),
+    rooms: fakeSheet([['name']]),
+    workexchange_lists: fakeSheet([['list', 'order', 'text_zh', 'text_en']])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  global.ContentService = {
+    createTextOutput: (json) => ({
+      setMimeType: (mime) => JSON.parse(json)
+    }),
+    MimeType: { JSON: 'application/json' }
+  };
+
+  const result = code.doGet({ parameter: {} });
+  assert.equal(result.ok, true);
+  assert.equal(result.settings.site_name, 'Rainbowstar', 'site_name is in response');
+  assert.equal(result.settings.contact_email, 'public@example.com', 'contact_email is in response');
+  assert.equal(result.settings.notify_email, undefined, 'notify_email is not in public response');
+});
+
+test('loadAdminContent(validToken) returns settings that includes notify_email', () => {
+  const token = authorizedToken();
+  const ss = fakeSpreadsheet({
+    settings: fakeSheet([
+      ['key', 'value'],
+      ['site_name', 'Rainbowstar'],
+      ['notify_email', 'owner@example.com']
+    ]),
+    rooms: fakeSheet([['name']]),
+    workexchange_lists: fakeSheet([['list', 'order', 'text_zh', 'text_en']])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+
+  const result = code.loadAdminContent(token);
+  assert.equal(result.ok, true);
+  assert.equal(result.settings.notify_email, 'owner@example.com', 'admin sees notify_email');
+});
+
+test('sendNotifyEmail_ still sends to the address in notify_email', () => {
+  const settings = { notify_email: 'owner@example.com' };
+  const sent = [];
+  global.MailApp = { sendEmail: (to, subject, body, opts) => sent.push({ to, subject, body, opts }) };
+  global.Session = { getEffectiveUser: () => ({ getEmail: () => 'fallback@example.com' }) };
+
+  // Call sendNotifyEmail_ with minimal fields to trigger email send
+  code.sendNotifyEmail_(settings, 'accommodation', [], (k) => '', '');
+
+  assert.equal(sent.length, 1, 'one email sent');
+  assert.equal(sent[0].to, 'owner@example.com', 'email sent to notify_email address');
+});

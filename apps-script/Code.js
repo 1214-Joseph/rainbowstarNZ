@@ -20,6 +20,9 @@ var SHEET_STAY = '住宿申請';
 var SHEET_WORK = '換宿申請';
 var SHEET_ERRORS = 'errors';
 
+/** Settings keys the public content endpoint must never disclose. */
+var PRIVATE_SETTINGS_KEYS = ['notify_email'];
+
 /** Reads the settings tab's A/B columns into a plain key-value object. */
 function readSettings_(ss) {
   var sheet = ss.getSheetByName(SHEET_SETTINGS);
@@ -64,11 +67,24 @@ function readListRows_(ss) {
   return readTableRows_(ss, SHEET_LISTS);
 }
 
-function buildContentPayload_(ss) {
+function buildContentPayload_(ss, includePrivate) {
+  var allSettings = readSettings_(ss);
+  var settingsToReturn = allSettings;
+
+  if (!includePrivate) {
+    // Build a fresh copy, excluding private keys
+    settingsToReturn = {};
+    for (var key in allSettings) {
+      if (allSettings.hasOwnProperty(key) && PRIVATE_SETTINGS_KEYS.indexOf(key) < 0) {
+        settingsToReturn[key] = allSettings[key];
+      }
+    }
+  }
+
   var lists = groupLists(readListRows_(ss));
   return {
     ok: true,
-    settings: readSettings_(ss),
+    settings: settingsToReturn,
     rooms: readRooms_(ss),
     rules: lists.rules,
     duties_out: lists.duties_out,
@@ -390,7 +406,7 @@ function writeLists_(ss, lists) {
 
 function loadAdminContent(token) {
   assertAuthorized_(token);
-  return buildContentPayload_(SpreadsheetApp.getActiveSpreadsheet());
+  return buildContentPayload_(SpreadsheetApp.getActiveSpreadsheet(), true);
 }
 
 function saveContent(token, payload) {
@@ -447,6 +463,7 @@ if (typeof module !== 'undefined' && module.exports) {
     SHEET_STAY: SHEET_STAY,
     SHEET_WORK: SHEET_WORK,
     SHEET_ERRORS: SHEET_ERRORS,
+    PRIVATE_SETTINGS_KEYS: PRIVATE_SETTINGS_KEYS,
     ROOM_COLUMNS: ROOM_COLUMNS,
     LIST_COLUMNS: LIST_COLUMNS,
     readSettings_: readSettings_,
