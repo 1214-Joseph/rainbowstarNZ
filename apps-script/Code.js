@@ -472,6 +472,23 @@ function assertKnownSection_(section) {
   }
 }
 
+/**
+ * Validates that a section not only has a known shape, but can actually receive
+ * a photo. For room-<n> sections, this checks that the room exists in the rooms
+ * tab. For hero and scenery-N, these are created on demand in the settings tab.
+ */
+function assertSectionExists_(ss, section) {
+  assertKnownSection_(section);
+
+  var roomIndex = roomIndexForSection_(section);
+  if (roomIndex !== null) {
+    var rooms = readRooms_(ss);
+    if (!rooms[roomIndex]) {
+      throw new Error('房型不存在 Room not found: ' + section);
+    }
+  }
+}
+
 function readPhotoUrls_(ss, section) {
   assertKnownSection_(section);
 
@@ -513,13 +530,13 @@ function folderForSection_(section) {
 
 function uploadPhoto(token, section, filename, base64, mimeType) {
   assertAuthorized_(token);
-  assertKnownSection_(section);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  assertSectionExists_(ss, section);
 
   var blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType || 'image/jpeg', filename || 'photo.jpg');
   var file = folderForSection_(section).createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var urls = readPhotoUrls_(ss, section).concat([photoUrlFor_(file.getId())]);
   writePhotoUrls_(ss, section, urls);
 
@@ -539,7 +556,7 @@ function deletePhoto(token, section, url) {
   var urls = existing.filter(function (kept) { return kept !== url; });
   writePhotoUrls_(ss, section, urls);
 
-  if (isListed) trashPhotoFile_(url);
+  if (isListed) trashPhotoFile_(ss, url);
   return { ok: true, urls: urls };
 }
 
@@ -552,7 +569,7 @@ function deletePhoto(token, section, url) {
  * source of truth for which photos exist, so a file that has already vanished
  * is not an error.
  */
-function trashPhotoFile_(url) {
+function trashPhotoFile_(ss, url) {
   var fileId = fileIdFromUrl_(url);
   if (!fileId) return;
 
@@ -561,7 +578,13 @@ function trashPhotoFile_(url) {
     if (!isInsidePhotoRoot_(file, scriptProperty_('PHOTO_ROOT_FOLDER_ID'))) return;
     file.setTrashed(true);
   } catch (error) {
-    // Already gone, or never ours.
+    // Log the error, but wrap the logging in its own try/catch so a logging
+    // failure cannot turn one failure into two.
+    try {
+      logError_(ss, 'trashPhotoFile', error);
+    } catch (logErr) {
+      // Swallowed: if the error log fails, we must not turn one failure into two.
+    }
   }
 }
 
@@ -614,6 +637,7 @@ if (typeof module !== 'undefined' && module.exports) {
     isInsidePhotoRoot_: isInsidePhotoRoot_,
     settingsKeyForSection_: settingsKeyForSection_,
     roomIndexForSection_: roomIndexForSection_,
+    assertSectionExists_: assertSectionExists_,
     readPhotoUrls_: readPhotoUrls_,
     writePhotoUrls_: writePhotoUrls_,
     folderForSection_: folderForSection_,

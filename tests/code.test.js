@@ -1102,3 +1102,118 @@ test('uploadPhoto rejects an unknown section rather than writing nowhere', () =>
   stubDrive();
   assert.throws(() => code.uploadPhoto(token, 'nonsense', 'a.jpg', 'x', 'image/jpeg'), /未知的區塊/);
 });
+
+// ============================================================================
+// Fix 1: uploadPhoto leaves a publicly shared orphan file when the room does not exist
+// ============================================================================
+
+test('assertSectionExists_ throws for room-5 against an empty rooms tab', () => {
+  const ss = fakeWritableSpreadsheet({ rooms: fakeWritableSheet([['name', 'photos']]) });
+  assert.throws(() => code.assertSectionExists_(ss, 'room-5'), /房型不存在/);
+});
+
+test('assertSectionExists_ does not throw for scenery-2 even though it has no row anywhere yet', () => {
+  const ss = fakeWritableSpreadsheet({ rooms: fakeWritableSheet([['name', 'photos']]) });
+  assert.doesNotThrow(() => code.assertSectionExists_(ss, 'scenery-2'));
+});
+
+test('uploadPhoto into room-99 when only one room exists throws 房型不存在, and NO Drive file was created', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({ rooms: fakeWritableSheet([['name', 'photos'], ['主屋', '']]) });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  const drive = stubDrive();
+
+  assert.throws(() => code.uploadPhoto(token, 'room-99', 'a.jpg', 'aGVsbG8=', 'image/jpeg'), /房型不存在/);
+  assert.deepEqual(drive.created, [], 'no Drive file was created');
+});
+
+test('uploadPhoto into room-0 when one room exists succeeds and the URL lands in that room\'s photos column', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({ rooms: fakeWritableSheet([['name', 'photos'], ['主屋', '']]) });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  stubDrive();
+
+  const result = code.uploadPhoto(token, 'room-0', 'a.jpg', 'aGVsbG8=', 'image/jpeg');
+
+  assert.equal(result.ok, true);
+  assert.equal(result.urls.length, 1);
+  const rooms = code.readRooms_(ss);
+  assert.deepEqual(code.readPhotoUrls_(ss, 'room-0'), result.urls);
+});
+
+test('uploadPhoto into hero succeeds even though hero has no row anywhere yet', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({ settings: fakeWritableSheet([['key', 'value']]) });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  stubDrive();
+
+  const result = code.uploadPhoto(token, 'hero', 'a.jpg', 'aGVsbG8=', 'image/jpeg');
+
+  assert.equal(result.ok, true);
+  assert.equal(result.urls.length, 1);
+  assert.deepEqual(code.readPhotoUrls_(ss, 'hero'), result.urls);
+});
+
+test('uploadPhoto with invalid base64 creates no Drive file', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({ settings: fakeWritableSheet([['key', 'value']]) });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  const drive = stubDrive();
+  global.Utilities.base64Decode = () => { throw new Error('invalid base64'); };
+
+  assert.throws(() => code.uploadPhoto(token, 'hero', 'a.jpg', 'not-valid-base64', 'image/jpeg'), /invalid base64/);
+  assert.deepEqual(drive.created, [], 'no Drive file was created');
+});
+
+// ============================================================================
+// Fix 2: a failed Drive deletion is indistinguishable from a successful one
+// ============================================================================
+
+test('when DriveApp.getFileById throws a permission error during deletePhoto, the sheet still forgets the photo, deletePhoto still returns ok:true, and an errors row with context trashPhotoFile exists', () => {
+  const token = authorizedToken();
+  const url = code.photoUrlFor_('FILE1');
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', 'keep.jpg\n' + url]])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  const drive = stubDrive();
+
+  // Override getFileById to throw a permission error
+  global.DriveApp.getFileById = () => { throw new Error('Permission denied'); };
+
+  const result = code.deletePhoto(token, 'hero', url);
+
+  assert.deepEqual(result.urls, ['keep.jpg'], 'the sheet still forgets the photo');
+  assert.equal(result.ok, true, 'deletePhoto still returns ok:true');
+
+  const errorSheet = ss.getSheetByName('errors');
+  assert.ok(errorSheet, 'errors sheet was created');
+  const errorRows = errorSheet.rows.filter(row => row[1] === 'trashPhotoFile');
+  assert.ok(errorRows.length > 0, 'an errors row with context trashPhotoFile exists');
+  assert.match(String(errorRows[0][2]), /Permission denied/, 'error detail mentions the thrown message');
+});
+
+test('when the listed file lives outside the photo root, deletePhoto trashes nothing AND writes NO errors row', () => {
+  const token = authorizedToken();
+  const url = code.photoUrlFor_('OUTSIDE');
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['hero_photos', url]])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+  const drive = stubDrive();
+
+  // The file exists and is listed, but its parent chain never reaches the root.
+  const iterator = (items) => { let i = 0; return { hasNext: () => i < items.length, next: () => items[i++] }; };
+  global.DriveApp.getFileById = () => ({
+    getParents: () => iterator([{ getId: () => 'ELSEWHERE', getParents: () => iterator([]) }]),
+    setTrashed: () => drive.trashed.push('OUTSIDE')
+  });
+
+  const result = code.deletePhoto(token, 'hero', url);
+
+  assert.deepEqual(result.urls, [], 'the sheet still forgets the photo');
+  assert.deepEqual(drive.trashed, [], 'nothing was trashed');
+
+  const errorSheet = ss.getSheetByName('errors');
+  assert.equal(errorSheet, null, 'no errors sheet was created');
+});
