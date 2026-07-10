@@ -491,8 +491,107 @@
     paint();
     return wrap;
   }
-  /** Filled in by Task 20. */
-  function renderListEditors(host) { void host; }
+  var LIST_META = [
+    { name: 'rules', title: '換宿章則' },
+    { name: 'duties_out', title: '戶外工作內容' },
+    { name: 'duties_in', title: '室內工作內容' }
+  ];
+
+  function collectListItems(listName) {
+    return (CONTENT[listName] || []).map(function (_, index) {
+      return {
+        zh: document.getElementById('li' + listName + '_' + index + '_zh').value,
+        en: document.getElementById('li' + listName + '_' + index + '_en').value
+      };
+    }).filter(function (item) { return item.zh.trim() || item.en.trim(); });
+  }
+
+  function saveOneList(listName, status) {
+    return runAuth('saveList', listName, collectListItems(listName)).then(function (result) {
+      CONTENT[listName] = result.items;
+      setMsg(status, 'ok', '已儲存。');
+      renderSections();
+    }).catch(function (error) {
+      setMsg(status, 'err', '儲存失敗：' + error);
+    });
+  }
+
+  function renderListEditors(host) {
+    LIST_META.forEach(function (meta) {
+      var listName = meta.name;
+      var card = el('div', { class: 'card' });
+      card.appendChild(el('h2', { text: meta.title }));
+      card.appendChild(el('div', { class: 'sub', text: '編號會自動產生，不需要自己填。拖曳不支援，請用上下箭頭調整順序。' }));
+
+      var status = el('div', { class: 'msg' });
+      var items = CONTENT[listName] || [];
+
+      items.forEach(function (item, index) {
+        var block = el('div', {});
+        block.style.cssText = 'border-top:1px dashed #ece3d3;padding-top:12px;margin-top:12px';
+
+        var header = el('div', {});
+        header.style.cssText = 'display:flex;align-items:center;gap:8px;justify-content:space-between';
+        header.appendChild(el('strong', { text: (listName === 'rules' ? '第 ' + (index + 1) + ' 條' : '第 ' + (index + 1) + ' 項') }));
+
+        var controls = el('div', {});
+        [['↑', -1], ['↓', 1]].forEach(function (pair) {
+          var move = el('button', { class: 'btn btn-ghost', type: 'button', text: pair[0] });
+          move.style.cssText = 'padding:4px 10px;margin-left:6px';
+          move.disabled = (pair[1] < 0 && index === 0) || (pair[1] > 0 && index === items.length - 1);
+          move.onclick = function () {
+            var current = collectListItems(listName);
+            var moved = current.splice(index, 1)[0];
+            current.splice(index + pair[1], 0, moved);
+            CONTENT[listName] = current;
+            renderSections();
+          };
+          controls.appendChild(move);
+        });
+
+        var remove = el('button', { class: 'btn btn-danger', type: 'button', text: '刪除這一項' });
+        remove.style.cssText = 'padding:4px 10px;margin-left:6px';
+        remove.onclick = function () {
+          CONTENT[listName] = collectListItems(listName).filter(function (_, i) { return i !== index; });
+          renderSections();
+        };
+        controls.appendChild(remove);
+        header.appendChild(controls);
+        block.appendChild(header);
+
+        var row = el('div', { class: 'row' });
+
+        var zh = el('div', {});
+        zh.appendChild(el('label', { text: '中文' }));
+        zh.appendChild(inputFor(item.zh, true, 'li' + listName + '_' + index + '_zh'));
+
+        var en = el('div', {});
+        en.appendChild(el('label', { text: 'English（可留空）' }));
+        en.appendChild(inputFor(item.en, true, 'li' + listName + '_' + index + '_en'));
+
+        row.appendChild(zh);
+        row.appendChild(en);
+        block.appendChild(row);
+        card.appendChild(block);
+      });
+
+      var add = el('button', { class: 'btn btn-ghost', type: 'button', text: '＋ 新增一項' });
+      add.style.marginTop = '16px';
+      add.onclick = function () {
+        CONTENT[listName] = collectListItems(listName).concat([{ zh: '', en: '' }]);
+        renderSections();
+      };
+
+      var save = el('button', { class: 'btn btn-primary', type: 'button', text: '儲存這份清單' });
+      save.style.cssText = 'margin-top:16px;margin-left:10px';
+      save.onclick = function () { saveOneList(listName, status); };
+
+      card.appendChild(add);
+      card.appendChild(save);
+      card.appendChild(status);
+      host.appendChild(card);
+    });
+  }
 
   document.getElementById('loginBtn').onclick = signIn;
   document.getElementById('passcode').addEventListener('keydown', function (event) {

@@ -95,3 +95,24 @@ test('the photo manager writes returned URLs back into CONTENT so a later save c
   assert.match(admin, /function updatePhotoState/);
   assert.match(admin, /updatePhotoState\(section,\s*result\.urls\)/);
 });
+
+test('all three editable lists are offered', () => {
+  for (const name of ['rules', 'duties_out', 'duties_in']) {
+    assert.match(admin, new RegExp(`name:\\s*'${name}'`), `no editor for list ${name}`);
+  }
+});
+
+test('lists are saved through an authenticated saveList call', () => {
+  assert.match(admin, /runAuth\(\s*'saveList'\s*,\s*listName\s*,\s*collectListItems\(listName\)\s*\)/);
+});
+
+test('the rules editor does not ask the owner to maintain numbering', () => {
+  assert.doesNotMatch(admin, /placeholder="順序"/);
+  assert.match(admin, /編號會自動產生/);
+});
+
+test('each list item offers a Chinese and an English box plus a delete control', () => {
+  assert.match(admin, /'li' \+ listName \+ '_' \+ index \+ '_zh'/);
+  assert.match(admin, /'li' \+ listName \+ '_' \+ index \+ '_en'/);
+  assert.match(admin, /刪除這一項/);
+});
