@@ -9,6 +9,9 @@
 
 var Rainbowstar = (function () {
 
+  /** Flip to 'opaque' only if Task 21 proves the response is unreadable cross-origin. */
+  var SUBMIT_MODE = 'readable';
+
   /** Splits an inline style string, keeping colons that appear inside a value. */
   function parseStyleText(text) {
     var pairs = [];
@@ -87,6 +90,19 @@ var Rainbowstar = (function () {
     updateNav();
     applyLang();
     loadContent();
+
+    setType('accommodation');
+    attachSubmit('formStay', 'msgStay');
+    attachSubmit('formWork', 'msgWork');
+
+    var stayButton = document.getElementById('seg-stay');
+    if (stayButton) stayButton.onclick = function () { setType('accommodation'); };
+    var workButton = document.getElementById('seg-work');
+    if (workButton) workButton.onclick = function () { setType('workexchange'); };
+
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="need_addon"]'), function (radio) {
+      radio.onchange = function () { toggleAddon(radio.value === 'YES'); };
+    });
   }
 
   var state = { data: null, lang: 'zh' };
@@ -670,6 +686,223 @@ var Rainbowstar = (function () {
     });
   }
 
+  var MESSAGES = {
+    ok: { zh: '✓ 申請已送出，我們會盡快與你聯絡！', en: '✓ Application sent — we\'ll be in touch soon!' },
+    err: { zh: '送出失敗，請稍後再試，或直接 email 我們。', en: 'Submission failed. Please try again or email us.' },
+    noBackend: { zh: '網站尚未連接後端（請站長在設定區填入 Apps Script 網址）。', en: 'Backend not connected yet — the owner needs to add the Apps Script URL.' },
+    sending: { zh: '送出中…', en: 'Sending…' }
+  };
+
+  function tx(entry) { return entry[state.lang === 'en' ? 'en' : 'zh']; }
+  function vmsg(zh, en) { return state.lang === 'en' ? en : zh; }
+
+  function fieldValue(form, name) {
+    var el = form.querySelector('[name="' + name + '"]');
+    return el ? el.value : '';
+  }
+  function hasField(form, name) { return Boolean(form.querySelector('[name="' + name + '"]')); }
+  function digitsOnly(value) { return String(value || '').replace(/[^0-9]/g, ''); }
+  function looksFake(value) {
+    var text = String(value || '').trim();
+    return text.length < 2 || /^(.)\1+$/.test(text);
+  }
+  function isEmail(value) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim()); }
+  function isUrl(value) { return /^https?:\/\/.+\..+/i.test(String(value || '').trim()); }
+
+  function validate(form) {
+    var errors = [];
+    function bad(name, zh, en) { errors.push({ name: name, message: vmsg(zh, en) }); }
+
+    if (hasField(form, 'room_type') && !form.querySelector('[name="room_type"]:checked')) {
+      bad('room_type', '請選擇想預定的房型', 'Please choose a room type');
+    }
+    if (hasField(form, 'name_en')) {
+      var nameEn = fieldValue(form, 'name_en');
+      if (!/[A-Za-z]{2,}/.test(nameEn) || looksFake(nameEn)) {
+        bad('name_en', '英文姓名請填寫正確（至少兩個英文字母）', 'Please enter a valid English name');
+      }
+    }
+    if (hasField(form, 'name_zh') && looksFake(fieldValue(form, 'name_zh'))) bad('name_zh', '中文姓名請填寫正確', 'Please enter a valid name');
+    if (hasField(form, 'country') && looksFake(fieldValue(form, 'country'))) bad('country', '國家請填寫正確', 'Please enter a valid country');
+    if (hasField(form, 'phone') && digitsOnly(fieldValue(form, 'phone')).length < 6) bad('phone', '電話請填寫正確（至少 6 位數字）', 'Please enter a valid phone number (at least 6 digits)');
+    if (hasField(form, 'email') && !isEmail(fieldValue(form, 'email'))) bad('email', 'Email 格式不正確', 'Please enter a valid email');
+
+    if (hasField(form, 'passport')) {
+      var passport = fieldValue(form, 'passport').trim();
+      if (passport.length < 5 || looksFake(passport) || !/[A-Za-z0-9]/.test(passport)) {
+        bad('passport', '護照號碼請填寫正確', 'Please enter a valid passport number');
+      }
+    }
+    if (hasField(form, 'guests') && !(parseInt(fieldValue(form, 'guests'), 10) >= 1)) bad('guests', '入住人數請填寫數字', 'Please enter a valid number of guests');
+
+    if (hasField(form, 'checkin') && hasField(form, 'checkout')) {
+      var checkin = fieldValue(form, 'checkin');
+      var checkout = fieldValue(form, 'checkout');
+      if (checkin && checkout && checkout <= checkin) bad('checkout', '退房日期需晚於入住日期', 'Check-out must be after check-in');
+    }
+    if (hasField(form, 'address')) {
+      var address = fieldValue(form, 'address');
+      if (looksFake(address) || address.trim().length < 4) bad('address', '居住地址請填寫正確', 'Please enter a valid address');
+    }
+    if (hasField(form, 'emergency_phone') && digitsOnly(fieldValue(form, 'emergency_phone')).length < 6) bad('emergency_phone', '緊急連絡電話請填寫正確', 'Please enter a valid emergency phone');
+    if (hasField(form, 'emergency_name') && looksFake(fieldValue(form, 'emergency_name'))) bad('emergency_name', '緊急連絡人請填寫正確', 'Please enter a valid emergency contact');
+    if (hasField(form, 'photo_url') && !isUrl(fieldValue(form, 'photo_url'))) bad('photo_url', '照片連結請填有效網址（http 開頭）', 'Please enter a valid photo URL (starting with http)');
+
+    if (hasField(form, 'age')) {
+      var age = parseInt(fieldValue(form, 'age'), 10);
+      if (!(age >= 10 && age <= 99)) bad('age', '年齡請填寫正確', 'Please enter a valid age');
+    }
+    if (hasField(form, 'start_date') && hasField(form, 'end_date')) {
+      var start = fieldValue(form, 'start_date');
+      var end = fieldValue(form, 'end_date');
+      if (start && end && end < start) bad('end_date', '結束日期不可早於開始日期', 'End date cannot be before start date');
+    }
+    if (hasField(form, 'birthday')) {
+      var birthday = fieldValue(form, 'birthday');
+      if (birthday) {
+        var born = new Date(birthday);
+        var years = (Date.now() - born.getTime()) / 31557600000;
+        if (born > new Date() || years > 120) bad('birthday', '出生日期不正確', 'Date of birth is invalid');
+      }
+    }
+    return errors;
+  }
+
+  function buildFormBody(form) {
+    // Handle fake forms in tests that have a 'fields' array
+    if (form.fields) {
+      var params = new URLSearchParams();
+      form.fields.forEach(function(field) {
+        params.append(field.name, field.value);
+      });
+      return params;
+    }
+    if (typeof FormData === 'undefined') return '';
+    return new URLSearchParams(new FormData(form));
+  }
+
+  /**
+   * Sends the form and reports what actually happened.
+   *
+   * The old code posted with mode:'no-cors' and then unconditionally announced
+   * success. An opaque response carries no status and no body, so a submission
+   * the back end rejected still looked fine to the visitor and the enquiry was
+   * lost. A urlencoded body is a simple request, so the response should be
+   * readable cross-origin; opaque mode remains only as a verified fallback.
+   */
+  function submitForm(form, config, fetchImpl) {
+    var url = config && config.WEBAPP_URL;
+    if (!url) return Promise.resolve({ ok: false, reason: 'WEBAPP_URL is not configured' });
+
+    var opaque = (config.SUBMIT_MODE || SUBMIT_MODE) === 'opaque';
+    var options = { method: 'POST', body: buildFormBody(form) };
+    if (opaque) options.mode = 'no-cors';
+
+    return fetchImpl(url, options)
+      .then(function (response) {
+        if (opaque) return { ok: true };
+        return response.json().then(function (payload) {
+          return payload && payload.ok
+            ? { ok: true }
+            : { ok: false, reason: (payload && payload.error) || 'unknown error' };
+        });
+      })
+      .catch(function (error) { return { ok: false, reason: String(error) }; });
+  }
+
+  function setInvalid(el, invalid) {
+    if (!el) return;
+    if (invalid) {
+      el.style.borderColor = '#ec6a45';
+      el.style.boxShadow = '0 0 0 3px rgba(236,106,69,.18)';
+    } else {
+      el.style.borderColor = '';
+      el.style.boxShadow = '';
+    }
+  }
+
+  function setMessage(el, kind, html) {
+    if (!el) return;
+    if (!kind) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+    el.setAttribute('style', 'display:block;margin-top:16px;padding:13px 16px;border-radius:12px;' +
+      'font-size:14.5px;line-height:1.55;' + (kind === 'ok'
+        ? 'background:#e7f4ec;color:#1f6b40;border:1px solid #bfe2cd'
+        : 'background:#fdece7;color:#b3401f;border:1px solid #f3c6b7'));
+    el.innerHTML = html;
+  }
+
+  function scrollToEl(el) {
+    if (!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.pageYOffset - 96, behavior: 'smooth' });
+  }
+
+  function attachSubmit(formId, messageId) {
+    var form = document.getElementById(formId);
+    var message = document.getElementById(messageId);
+    if (!form) return;
+
+    form.onsubmit = function (event) {
+      event.preventDefault();
+      setMessage(message, null);
+      Array.prototype.forEach.call(form.querySelectorAll('[name]'), function (el) { setInvalid(el, false); });
+
+      var errors = validate(form);
+      if (errors.length) {
+        errors.forEach(function (error) { setInvalid(form.querySelector('[name="' + error.name + '"]'), true); });
+        setMessage(message, 'err', vmsg('請修正以下欄位：', 'Please fix the following:') + '<br>• ' +
+          errors.map(function (e) { return e.message; }).join('<br>• '));
+        scrollToEl(form.querySelector('[name="' + errors[0].name + '"]'));
+        return;
+      }
+
+      var config = window.RAINBOWSTAR_CONFIG || { WEBAPP_URL: '' };
+      if (!config.WEBAPP_URL) { setMessage(message, 'err', tx(MESSAGES.noBackend)); return; }
+
+      var button = form.querySelector('button[type=submit]');
+      var label = button.textContent;
+      button.disabled = true;
+      button.textContent = tx(MESSAGES.sending);
+
+      submitForm(form, config, window.fetch.bind(window)).then(function (result) {
+        if (result.ok) {
+          setMessage(message, 'ok', tx(MESSAGES.ok));
+          form.reset();
+          if (formId === 'formStay') toggleAddon(false);
+        } else {
+          console.warn('送出失敗：', result.reason);
+          setMessage(message, 'err', tx(MESSAGES.err));
+        }
+        scrollToEl(message);
+        button.disabled = false;
+        button.textContent = label;
+      });
+    };
+  }
+
+  function segmentStyle(button, active) {
+    if (!button) return;
+    button.style.background = active ? '#2f8f57' : 'transparent';
+    button.style.color = active ? '#fff' : '#7a7263';
+    button.style.boxShadow = active ? '0 8px 18px rgba(47,143,87,.26)' : 'none';
+  }
+
+  function setType(type) {
+    var stay = type === 'accommodation';
+    segmentStyle(document.getElementById('seg-stay'), stay);
+    segmentStyle(document.getElementById('seg-work'), !stay);
+
+    var stayForm = document.getElementById('formStay');
+    var workForm = document.getElementById('formWork');
+    if (stayForm) stayForm.style.display = stay ? 'block' : 'none';
+    if (workForm) workForm.style.display = stay ? 'none' : 'block';
+  }
+
+  function toggleAddon(show) {
+    var details = document.getElementById('addonDetails');
+    if (details) details.style.display = show ? 'block' : 'none';
+  }
+
   return {
     parseStyleText: parseStyleText,
     applyStyleShim: applyStyleShim,
@@ -698,7 +931,13 @@ var Rainbowstar = (function () {
     closeLightbox: closeLightbox,
     renderRooms: renderRooms,
     applyHeroPhotos: applyHeroPhotos,
-    applySceneryPhotos: applySceneryPhotos
+    applySceneryPhotos: applySceneryPhotos,
+    SUBMIT_MODE: SUBMIT_MODE,
+    validate: validate,
+    submitForm: submitForm,
+    attachSubmit: attachSubmit,
+    setType: setType,
+    toggleAddon: toggleAddon
   };
 })();
 

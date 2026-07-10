@@ -246,3 +246,96 @@ test('roomPrice shows an em dash for an absent, zero or blank price', () => {
   assert.equal(app.roomPrice({ price: 0 }), '—');
   assert.equal(app.roomPrice({ price: '0' }), '—');
 });
+
+/** A stand-in <form> exposing only what validate() and submitForm() touch. */
+function fakeForm(values) {
+  const fields = Object.keys(values).map((name) => ({ name, value: values[name] }));
+  return {
+    fields,
+    querySelector: (selector) => {
+      const match = selector.match(/^\[name="(.+)"\](:checked)?$/);
+      if (!match) return null;
+      const field = fields.find((f) => f.name === match[1]);
+      if (!field) return null;
+      if (match[2] && !field.checked) return null;
+      return field;
+    }
+  };
+}
+
+const namesOf = (errors) => errors.map((e) => e.name);
+
+test('validate accepts a well-formed accommodation submission', () => {
+  const form = fakeForm({
+    name_en: 'Mei Wang', name_zh: '王美', country: '台灣', phone: '0211234567',
+    email: 'mei@example.com', passport: 'A12345678', guests: '2',
+    checkin: '2026-08-01', checkout: '2026-08-05'
+  });
+  assert.deepEqual(app.validate(form), []);
+});
+
+test('validate rejects an English name shorter than two letters or made of one repeated letter', () => {
+  assert.ok(namesOf(app.validate(fakeForm({ name_en: 'a' }))).includes('name_en'));
+  assert.ok(namesOf(app.validate(fakeForm({ name_en: 'aaaa' }))).includes('name_en'));
+});
+
+test('validate rejects a phone with fewer than six digits and a malformed email', () => {
+  assert.ok(namesOf(app.validate(fakeForm({ phone: '123' }))).includes('phone'));
+  assert.ok(namesOf(app.validate(fakeForm({ email: 'nope' }))).includes('email'));
+});
+
+test('validate rejects a checkout on or before the check-in date', () => {
+  const same = fakeForm({ checkin: '2026-08-01', checkout: '2026-08-01' });
+  assert.ok(namesOf(app.validate(same)).includes('checkout'));
+  const before = fakeForm({ checkin: '2026-08-05', checkout: '2026-08-01' });
+  assert.ok(namesOf(app.validate(before)).includes('checkout'));
+});
+
+test('validate rejects an end date before the start date, but allows an equal one', () => {
+  assert.ok(namesOf(app.validate(fakeForm({ start_date: '2026-08-05', end_date: '2026-08-01' }))).includes('end_date'));
+  assert.deepEqual(namesOf(app.validate(fakeForm({ start_date: '2026-08-01', end_date: '2026-08-01' }))), []);
+});
+
+test('validate rejects an age outside 10..99 and a photo URL that is not http', () => {
+  assert.ok(namesOf(app.validate(fakeForm({ age: '5' }))).includes('age'));
+  assert.ok(namesOf(app.validate(fakeForm({ age: '150' }))).includes('age'));
+  assert.ok(namesOf(app.validate(fakeForm({ photo_url: 'not a url' }))).includes('photo_url'));
+  assert.deepEqual(namesOf(app.validate(fakeForm({ photo_url: 'https://example.com/me.jpg' }))), []);
+});
+
+test('validate only checks fields the form actually contains', () => {
+  assert.deepEqual(app.validate(fakeForm({})), [], 'an empty form raises no errors about absent fields');
+});
+
+test('submitForm reports failure when the back end answers ok:false', async () => {
+  const fetchImpl = async () => ({ json: async () => ({ ok: false, error: 'boom' }) });
+  const result = await app.submitForm(fakeForm({}), { WEBAPP_URL: 'https://example.com/exec' }, fetchImpl);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'boom');
+});
+
+test('submitForm reports success when the back end answers ok:true', async () => {
+  const fetchImpl = async () => ({ json: async () => ({ ok: true }) });
+  const result = await app.submitForm(fakeForm({}), { WEBAPP_URL: 'https://example.com/exec' }, fetchImpl);
+  assert.equal(result.ok, true);
+});
+
+test('submitForm reports failure when the network throws', async () => {
+  const fetchImpl = async () => { throw new Error('offline'); };
+  const result = await app.submitForm(fakeForm({}), { WEBAPP_URL: 'https://example.com/exec' }, fetchImpl);
+  assert.equal(result.ok, false);
+});
+
+test('submitForm refuses to claim success when no back end is configured', async () => {
+  const result = await app.submitForm(fakeForm({}), { WEBAPP_URL: '' }, async () => { throw new Error('never'); });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /WEBAPP_URL/);
+});
+
+test('submitForm in opaque mode assumes success, which is the whole reason readable mode is preferred', async () => {
+  const fetchImpl = async () => ({ type: 'opaque' });
+  const result = await app.submitForm(
+    fakeForm({}), { WEBAPP_URL: 'https://example.com/exec', SUBMIT_MODE: 'opaque' }, fetchImpl
+  );
+  assert.equal(result.ok, true);
+});
