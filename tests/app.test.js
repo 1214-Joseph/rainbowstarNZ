@@ -90,3 +90,26 @@ test('applyStyleShim ignores an element whose shim attribute is empty', () => {
   app.applyStyleShim(fakeRoot({ '[style-hover]': [el] }));
   assert.doesNotThrow(() => el.fire('mouseenter'));
 });
+
+test('settingValue returns undefined in English when no _en exists, so data-en survives', () => {
+  assert.equal(app.settingValue({ tagline: '標語' }, 'tagline', 'en'), undefined);
+  assert.equal(app.settingValue({ tagline: '標語', tagline_en: '' }, 'tagline', 'en'), undefined);
+  assert.equal(app.settingValue({ tagline: '標語', tagline_en: 'Tagline' }, 'tagline', 'en'), 'Tagline');
+  assert.equal(app.settingValue({ tagline: '標語' }, 'tagline', 'zh'), '標語');
+});
+
+test('pickRow falls back to Chinese in English mode, because rooms have no markup fallback', () => {
+  assert.equal(app.pickRow({ name: '主屋' }, 'name', 'en'), '主屋');
+  assert.equal(app.pickRow({ name: '主屋', name_en: 'Dorm' }, 'name', 'en'), 'Dorm');
+  assert.equal(app.pickRow({}, 'name', 'zh'), undefined);
+});
+
+test('splitUrls matches the back end: newline, comma or pipe, trimmed and de-duplicated', () => {
+  assert.deepEqual(app.splitUrls(' a.jpg ,\n b.jpg | a.jpg'), ['a.jpg', 'b.jpg']);
+  assert.deepEqual(app.splitUrls(null), []);
+});
+
+test('escapeHtml neutralises markup so sheet content cannot inject elements', () => {
+  assert.equal(app.escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
+  assert.equal(app.escapeHtml('a & "b" \'c\''), 'a &amp; &quot;b&quot; &#39;c&#39;');
+});
