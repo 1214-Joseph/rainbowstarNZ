@@ -338,6 +338,7 @@ Google Drive 公開直連網址歷史上不穩。採**雙軌 + 可退回**：
   作法：`verifyPasscode(passcode)` 驗證成功後產生一次性 session token（`Utilities.getUuid()`），存入 `CacheService`（6 小時）；其餘所有後台函式（`loadAdminContent` / `saveContent` / `saveList` / `uploadPhoto` / `deletePhoto` / `reorderPhotos`）**第一個參數皆為 token**，並在進入時呼叫 `assertAuthorized_(token)`，不符即拋出。
 - **⚠️ `?img=<fileId>` 必須限制範圍（關鍵）**：若不驗證，此端點會成為「業者整個 Drive 的公開讀取代理」——任何人傳入任意 `fileId` 即可取得業者有權讀取的任何檔案。
   作法：供圖前確認該檔案的上層資料夾位於 `PHOTO_ROOT_FOLDER_ID` 之下，否則回傳 404。
+- **⚠️ `settings` 分頁同時存放「公開文案」與「私密設定」**：`contact_email` 是刻意公開的，`notify_email` 不是。公開的 `doGet` 內容 JSON **必須過濾掉** `PRIVATE_SETTINGS_KEYS`（目前為 `notify_email`），否則任何人 `curl` 一次就取得業者的收信信箱。`loadAdminContent` 則需取得完整設定（後台要編輯它）。日後新增任何私密鍵，務必同時加入該清單。
 - **公開 Web App**：存取權「任何人」是讀內容/收表單所需。既有 `ACCOM_FIELDS`/`WORK_FIELDS` 白名單即防止任意寫入其他分頁的防線，**須保留**。
 - **表單濫用/spam**：沿用前端驗證 + 後端欄位白名單 + `checkSuspicious_()` 標記。未來可加 honeypot 或 Turnstile。
 - **個資**：表單含護照號、緊急聯絡、出生日期等；試算表僅業者帳號可編輯。公開站不顯示任何回應資料。
