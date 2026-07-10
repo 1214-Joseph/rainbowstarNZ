@@ -5324,16 +5324,36 @@ fetch('<WEBAPP_URL>', {
 3. 到試算表 `settings` 分頁複製 `hero_photos` 的值（應為 `https://lh3.googleusercontent.com/d/...=w1600`）。
 4. 直接在瀏覽器開啟該網址。
 
-- **若圖片正常顯示** → 保持 `photoUrlFor_` 現狀，不需改動。
-- **若被擋（403 / 重新導向到登入頁）** → 改 `apps-script/Code.js` 的 `photoUrlFor_`，改用受範圍限制的代理端點：
+- **若圖片正常顯示** → 保持 `photoUrlFor_` 現狀，不需改動。這是預期路徑。
+- **若被擋（403 / 重新導向到登入頁）** → 依序嘗試下列退路，**逐一實測**，採用第一個可行者：
 
-```js
-function photoUrlFor_(fileId) {
-  return ScriptApp.getService().getUrl() + '?img=' + fileId;
-}
-```
+  **退路 A（優先）**：換一種 Google 直連網址形式。檔案已設為「知道連結者可讀」，因此下列兩者之一通常可直接嵌入：
 
-並確認 `fileIdFromUrl_` 仍能反解（它已支援 `?img=` 形式）。重新部署後，重新上傳一張測試照片，確認公開站顯示得出來。
+  ```js
+  function photoUrlFor_(fileId) {
+    return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1600';
+  }
+  ```
+
+  ```js
+  function photoUrlFor_(fileId) {
+    return 'https://drive.usercontent.google.com/download?id=' + fileId + '&export=view';
+  }
+  ```
+
+  **退路 B（僅在 A 全數失敗時）**：改用 Apps Script 自身的 `?img=` 代理：
+
+  ```js
+  function photoUrlFor_(fileId) {
+    return ScriptApp.getService().getUrl() + '?img=' + fileId;
+  }
+  ```
+
+> ⚠️ **退路 B 未經證實可行，必須先單獨驗證。** Apps Script 的 `doGet` 只保證能回傳 `HtmlService.HtmlOutput` 或 `ContentService.TextOutput`；`ContentService` **沒有二進位輸出**。既有的 `serveImage_` 回傳 `file.getBlob()`，這在真實部署可能直接失敗。
+>
+> 驗證方式：部署後直接開啟 `<WEBAPP_URL>?img=<某張測試照片的 fileId>`。若瀏覽器顯示出圖片，退路 B 可用；若下載成檔案、顯示錯誤頁、或印出 blob 的文字表示，則退路 B 不可用，必須採用退路 A。
+>
+> 無論採用哪條路，`fileIdFromUrl_` 都必須能從新的網址形式反解出 `fileId`（`deletePhoto` 靠它把 Drive 檔案移入垃圾桶）。目前它只認得 `lh3.googleusercontent.com/d/<id>` 與 `?img=<id>` 兩種形式——**若改用退路 A，必須同步擴充 `fileIdFromUrl_` 並補測試**，否則刪除照片時 Drive 檔案會殘留。
 
 > ⚠️ 改用代理後，`?img=` 端點就成為熱路徑。務必再次確認 `isInsidePhotoRoot_` 有生效：拿一個**不在** `Rainbowstar Photos` 底下的 Drive 檔案 ID 去打 `<WEBAPP_URL>?img=<那個ID>`，Expected: 回傳 `Not found`，**不是**檔案內容。
 
