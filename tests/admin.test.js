@@ -116,3 +116,17 @@ test('each list item offers a Chinese and an English box plus a delete control',
   assert.match(admin, /'li' \+ listName \+ '_' \+ index \+ '_en'/);
   assert.match(admin, /刪除這一項/);
 });
+
+test('the scenery photo manager reads the same key shape it writes (no leading space)', () => {
+  assert.doesNotMatch(admin, / scenery/, 'scenery key should not have a leading space');
+});
+
+test('the scenery photo manager key matches the write path', () => {
+  assert.match(admin, /\['scenery' \+ n \+ '_photos'\]/);
+});
+
+test('uploadPhoto, deletePhoto, and save do not appear as function definitions', () => {
+  assert.doesNotMatch(admin, /function\s+uploadPhoto\s*\(/);
+  assert.doesNotMatch(admin, /function\s+deletePhoto\s*\(/);
+  assert.doesNotMatch(admin, /function\s+save\s*\(/);
+});
