@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#fdfbf6; color:#2f2b22; font-family:'Noto Sans TC',system-ui,-apple-system,sans-serif; font-size:15px; line-height:1.6; }
+  .wrap { max-width:960px; margin:0 auto; padding:28px 20px 80px; }
+  h1 { font-size:22px; margin:0 0 4px; color:#1f6b40; }
+  .sub { color:#9a927f; font-size:13px; margin-bottom:26px; }
+  .card { background:#fff; border:1px solid #ece3d3; border-radius:16px; padding:22px; margin-bottom:18px; box-shadow:0 8px 24px rgba(60,50,30,.05); }
+  .card h2 { font-size:17px; margin:0 0 16px; color:#1f6b40; }
+  label { display:block; font-weight:600; font-size:13px; margin:14px 0 6px; color:#3a382f; }
+  input[type=text], input[type=email], textarea {
+    width:100%; padding:10px 12px; border:1.5px solid #e4dccb; border-radius:10px;
+    font:inherit; background:#fff; color:#2f2b22;
+  }
+  input:focus, textarea:focus { outline:2px solid #2f8f57; border-color:transparent; }
+  textarea { min-height:84px; resize:vertical; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:700px) { .row { grid-template-columns:1fr; } }
+  .btn { border:0; border-radius:999px; padding:11px 22px; font-weight:700; cursor:pointer; font-size:14px; }
+  .btn-primary { background:#2f8f57; color:#fff; }
+  .btn-primary:disabled { opacity:.55; cursor:default; }
+  .btn-ghost { background:#f2ece0; color:#5c5648; }
+  .btn-danger { background:#fdece7; color:#b3401f; }
+  .msg { display:none; margin:14px 0; padding:11px 14px; border-radius:10px; font-size:14px; }
+  .msg.ok { display:block; background:#e7f4ec; color:#1f6b40; border:1px solid #bfe2cd; }
+  .msg.err { display:block; background:#fdece7; color:#b3401f; border:1px solid #f3c6b7; }
+  .bar { position:sticky; bottom:0; background:rgba(253,251,246,.94); border-top:1px solid #ece3d3; padding:14px 20px; display:flex; gap:12px; justify-content:flex-end; }
+  #login { max-width:380px; margin:14vh auto; }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="card">
+    <h1>彩虹星民宿 — 網站後台</h1>
+    <div class="sub">Rainbowstar site admin</div>
+    <label for="passcode">密碼 Passcode</label>
+    <input type="password" id="passcode" autocomplete="current-password">
+    <div id="loginMsg" class="msg"></div>
+    <div style="margin-top:16px"><button class="btn btn-primary" id="loginBtn">登入 Sign in</button></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="wrap">
+    <h1>網站後台</h1>
+    <div class="sub">改完記得按最下面的「儲存」。公開網站會在訪客下次開啟時更新。</div>
+    <div id="sections"></div>
+    <div id="saveMsg" class="msg"></div>
+  </div>
+  <div class="bar">
+    <button class="btn btn-ghost" id="reloadBtn">重新載入</button>
+    <button class="btn btn-primary" id="saveBtn">儲存</button>
+  </div>
+</div>
+
+<script>
+  var TOKEN = null;
+  var CONTENT = null;
+
+  /** Unauthenticated call. Only verifyPasscode may use this. */
+  function run(name) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name].apply(null, args);
+    });
+  }
+
+  /**
+   * Authenticated call.
+   *
+   * The web app is published for Anyone, so loading this page is enough to
+   * invoke its server functions from the console. Every guarded function takes
+   * the session token as its first argument and verifies it server-side.
+   */
+  function runAuth(name) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    args.unshift(TOKEN);
+    return new Promise(function (resolve, reject) {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name].apply(null, args);
+    });
+  }
+
+  function setMsg(el, kind, text) {
+    el.className = 'msg' + (kind ? ' ' + kind : '');
+    el.textContent = text || '';
+  }
+
+  function showLogin(errorMessage) {
+    document.getElementById('login').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+    if (errorMessage) setMsg(document.getElementById('loginMsg'), 'err', errorMessage);
+  }
+
+  function showApp() {
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  }
+
+  function loadAndRender() {
+    return runAuth('loadAdminContent').then(function (content) {
+      CONTENT = content;
+      renderSections();
+    });
+  }
+
+  function save() {
+    runAuth('saveContent');
+    runAuth('saveList');
+    runAuth('reorderPhotos');
+  }
+
+  function uploadPhoto() {
+    runAuth('uploadPhoto');
+  }
+
+  function deletePhoto() {
+    runAuth('deletePhoto');
+  }
+
+  function signIn() {
+    var button = document.getElementById('loginBtn');
+    var passcode = document.getElementById('passcode').value;
+    button.disabled = true;
+
+    run('verifyPasscode', passcode).then(function (result) {
+      if (!result || !result.ok) {
+        button.disabled = false;
+        showLogin('密碼錯誤 Wrong passcode');
+        return;
+      }
+      TOKEN = result.token;
+      try { sessionStorage.setItem('rb_admin_token', TOKEN); } catch (error) { /* private mode */ }
+      showApp();
+      return loadAndRender();
+    }).catch(function (error) {
+      button.disabled = false;
+      showLogin(String(error));
+    });
+  }
+
+  /** Filled in by Tasks 18-20. */
+  function renderSections() {}
+
+  document.getElementById('loginBtn').onclick = signIn;
+  document.getElementById('passcode').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') signIn();
+  });
+  document.getElementById('reloadBtn').onclick = function () { loadAndRender(); };
+  document.getElementById('saveBtn').onclick = save;
+
+  (function restoreSession() {
+    var saved = null;
+    try { saved = sessionStorage.getItem('rb_admin_token'); } catch (error) { /* private mode */ }
+    if (!saved) return;
+    TOKEN = saved;
+    runAuth('loadAdminContent').then(function (content) {
+      CONTENT = content;
+      showApp();
+      renderSections();
+    }).catch(function () { TOKEN = null; showLogin(''); });
+  })();
+</script>
+</body>
+</html>
