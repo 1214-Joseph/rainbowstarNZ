@@ -215,3 +215,34 @@ test('renderList tolerates an empty item list', () => {
   assert.doesNotThrow(() => app.renderList(host, [], 'rule', 'zh'));
   assert.equal(host.children.length, 0);
 });
+
+test('collectPhotos reads the canonical photos column and the legacy photo columns', () => {
+  assert.deepEqual(app.collectPhotos({ photos: 'a.jpg\nb.jpg' }), ['a.jpg', 'b.jpg']);
+  assert.deepEqual(app.collectPhotos({ photo: 'a.jpg', photo2: 'b.jpg' }), ['a.jpg', 'b.jpg']);
+  assert.deepEqual(app.collectPhotos({ photos: 'a.jpg', photo: 'a.jpg' }), ['a.jpg'], 'de-duplicated');
+  assert.deepEqual(app.collectPhotos({}), []);
+});
+
+test('roomsToRender falls back to the single built-in room when the sheet is empty', () => {
+  const rooms = [{ name: '主屋' }];
+  assert.deepEqual(app.roomsToRender(rooms), rooms);
+  assert.deepEqual(app.roomsToRender([]), app.DEFAULT_ROOMS);
+  assert.deepEqual(app.roomsToRender(null), app.DEFAULT_ROOMS);
+});
+
+test('DEFAULT_ROOMS is bilingual, so English mode never shows Chinese room copy', () => {
+  for (const room of app.DEFAULT_ROOMS) {
+    assert.ok(room.name_en, 'missing name_en');
+    assert.ok(room.description_en, 'missing description_en');
+    assert.ok(room.unit_en, 'missing unit_en');
+  }
+});
+
+test('roomPrice shows an em dash for an absent, zero or blank price', () => {
+  assert.equal(app.roomPrice({ price: 35 }), 35);
+  assert.equal(app.roomPrice({ price: '$35' }), '$35');
+  assert.equal(app.roomPrice({}), '—');
+  assert.equal(app.roomPrice({ price: '' }), '—');
+  assert.equal(app.roomPrice({ price: 0 }), '—');
+  assert.equal(app.roomPrice({ price: '0' }), '—');
+});

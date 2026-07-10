@@ -323,9 +323,352 @@ var Rainbowstar = (function () {
     }
   }
 
-  function applyHeroPhotos(urls) { void urls; }
-  function applySceneryPhotos(settings) { void settings; }
-  function renderRooms(rooms, lang) { void rooms; void lang; }
+  var DEFAULT_ROOMS = [{
+    name: '主屋 Dorm Room',
+    name_en: 'Main House Dorm Room',
+    description: '經濟實惠的床位，適合長住打工度假者。',
+    description_en: 'Affordable dorm beds — great for long-stay working-holiday travellers.',
+    price: '—',
+    unit: '/ 床',
+    unit_en: '/ bed'
+  }];
+
+  var PHOTO_KEYS = [
+    'photo', 'photo1', 'photo2', 'photo3', 'photo4', 'photo5', 'photo6', 'photo7', 'photo8',
+    'photos', 'images', 'image', 'image1', 'image2', 'image3', 'image4', 'img', 'photo_url'
+  ];
+  var DEMO_GRADIENTS = [
+    'linear-gradient(150deg,#eaf5ee,#f3ecd9)',
+    'linear-gradient(150deg,#e3eef8,#eef4e9)',
+    'linear-gradient(150deg,#f4ede0,#e9f4ee)'
+  ];
+  var ROOM_ACCENTS = ['#2f8f57', '#4c9ed4', '#f2a63c', '#ec6a45', '#9a86cf'];
+
+  function collectPhotos(room) {
+    var urls = [];
+    PHOTO_KEYS.forEach(function (key) {
+      splitUrls(room[key]).forEach(function (url) {
+        if (urls.indexOf(url) < 0) urls.push(url);
+      });
+    });
+    return urls;
+  }
+
+  function roomsToRender(rooms) {
+    return (rooms && rooms.length) ? rooms : DEFAULT_ROOMS;
+  }
+
+  function roomPrice(room) {
+    var price = room.price;
+    return (price === undefined || price === '' || price === 0 || price === '0') ? '—' : price;
+  }
+
+  function roomSlides(room) {
+    var urls = collectPhotos(room);
+    if (urls.length) return urls.map(function (url) { return { url: url }; });
+    return DEMO_GRADIENTS.map(function (gradient) {
+      return { gradient: gradient, labelZh: '房型照片', labelEn: 'Room photo' };
+    });
+  }
+
+  function makeSlide(slide) {
+    var el = document.createElement('div');
+    var base = 'position:absolute;inset:0;transition:opacity .35s ease';
+    if (slide.url) {
+      el.setAttribute('style', base + ';background:#eee;background-image:url("' +
+        String(slide.url).replace(/"/g, '%22') + '");background-size:cover;background-position:center');
+    } else {
+      el.setAttribute('style', base + ';background:' + slide.gradient +
+        ';display:flex;align-items:center;justify-content:center;color:#a7a08d;font-size:12.5px;font-weight:600');
+      var label = document.createElement('span');
+      label.setAttribute('data-zh', slide.labelZh);
+      label.setAttribute('data-en', slide.labelEn);
+      label.textContent = state.lang === 'en' ? slide.labelEn : slide.labelZh;
+      el.appendChild(label);
+    }
+    return el;
+  }
+
+  function buildCarousel(host, slides, startIndex) {
+    if (!host) return;
+    host.innerHTML = '';
+    host.style.position = 'relative';
+    host.style.overflow = 'hidden';
+
+    var index = 0;
+    var dots = [];
+    var slideEls = slides.map(function (slide) {
+      var el = makeSlide(slide);
+      host.appendChild(el);
+      return el;
+    });
+
+    function show(next) {
+      index = (next + slides.length) % slides.length;
+      host.__index = index;
+      slideEls.forEach(function (el, i) { el.style.opacity = i === index ? '1' : '0'; });
+      dots.forEach(function (dot, i) {
+        dot.style.background = i === index ? '#fff' : 'rgba(255,255,255,.55)';
+        dot.style.transform = i === index ? 'scale(1.25)' : 'none';
+      });
+    }
+
+    if (slides.length > 1) {
+      [-1, 1].forEach(function (direction) {
+        var arrow = document.createElement('button');
+        arrow.type = 'button';
+        arrow.setAttribute('aria-label', direction < 0 ? 'previous photo' : 'next photo');
+        arrow.setAttribute('style', 'position:absolute;top:50%;' + (direction < 0 ? 'left:8px' : 'right:8px') +
+          ';transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.9);' +
+          'border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;' +
+          'box-shadow:0 3px 10px rgba(0,0,0,.2);color:#2f2b22;z-index:2');
+        arrow.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+          'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="' +
+          (direction < 0 ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6') + '"/></svg>';
+        arrow.onclick = function (event) { event.preventDefault(); event.stopPropagation(); show(index + direction); };
+        host.appendChild(arrow);
+      });
+
+      var dotBar = document.createElement('div');
+      dotBar.setAttribute('style', 'position:absolute;bottom:9px;left:0;right:0;display:flex;justify-content:center;gap:6px;z-index:2');
+      slides.forEach(function (_, i) {
+        var dot = document.createElement('span');
+        dot.setAttribute('style', 'width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.55);' +
+          'box-shadow:0 1px 3px rgba(0,0,0,.35);cursor:pointer;transition:transform .15s,background .15s');
+        dot.onclick = function (event) { event.preventDefault(); event.stopPropagation(); show(i); };
+        dotBar.appendChild(dot);
+        dots.push(dot);
+      });
+      host.appendChild(dotBar);
+
+      var startX = null;
+      host.ontouchstart = function (event) { startX = event.touches[0].clientX; };
+      host.ontouchend = function (event) {
+        if (startX === null) return;
+        var dx = event.changedTouches[0].clientX - startX;
+        if (Math.abs(dx) > 40) show(index + (dx < 0 ? 1 : -1));
+        startX = null;
+      };
+    }
+
+    show(startIndex || 0);
+  }
+
+  function addEnlargeHint(el) {
+    if (!el || el.querySelector('.rbzoom')) return;
+    if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+    var hint = document.createElement('div');
+    hint.className = 'rbzoom';
+    hint.setAttribute('style', 'position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:9px;' +
+      'background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;color:#2f2b22;' +
+      'box-shadow:0 2px 8px rgba(0,0,0,.22);pointer-events:none;z-index:3');
+    hint.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+    el.appendChild(hint);
+  }
+
+  function ensureLightbox() {
+    if (document.getElementById('rbLightbox')) return;
+    var box = document.createElement('div');
+    box.id = 'rbLightbox';
+    box.setAttribute('style', 'position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;' +
+      'padding:20px;background:rgba(28,24,16,.82);backdrop-filter:blur(6px)');
+    box.innerHTML = '<div style="position:relative;width:min(940px,95vw);max-height:92vh;background:#fff;' +
+      'border-radius:20px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 40px 90px rgba(0,0,0,.5)">' +
+      '<div class="lbphoto" style="position:relative;background:#0c0c0c;height:min(60vh,520px)"></div>' +
+      '<div style="padding:22px 26px 26px">' +
+      '<div class="lbname" style="font-family:\'Newsreader\',\'Noto Serif TC\',serif;font-weight:600;font-size:23px;color:#2f2b22;margin-bottom:8px"></div>' +
+      '<div class="lbdesc" style="color:#6b6558;font-size:14.5px;line-height:1.7;margin-bottom:14px;white-space:pre-line"></div>' +
+      '<div class="lbprice" style="display:flex;align-items:baseline;gap:4px"></div></div></div>' +
+      '<button class="lbclose" type="button" aria-label="close" style="position:absolute;top:16px;right:16px;' +
+      'width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);' +
+      'color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center">' +
+      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+      'stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+
+    document.body.appendChild(box);
+    box.addEventListener('click', function (event) { if (event.target === box) closeLightbox(); });
+    box.querySelector('.lbclose').onclick = closeLightbox;
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeLightbox(); });
+  }
+
+  function openLightbox(slides, startIndex, meta) {
+    ensureLightbox();
+    var box = document.getElementById('rbLightbox');
+    buildCarousel(box.querySelector('.lbphoto'), slides, startIndex || 0);
+    box.querySelector('.lbname').textContent = (meta && meta.name) || '';
+
+    var description = box.querySelector('.lbdesc');
+    description.textContent = (meta && meta.description) || '';
+    description.style.display = (meta && meta.description) ? 'block' : 'none';
+
+    box.querySelector('.lbprice').innerHTML = (meta && meta.priceHtml) || '';
+    box.style.display = 'flex';
+    document.documentElement.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    var box = document.getElementById('rbLightbox');
+    if (box) box.style.display = 'none';
+    document.documentElement.style.overflow = '';
+  }
+
+  function setupPhotoHost(host, slides, meta) {
+    if (!host) return;
+    buildCarousel(host, slides, 0);
+    host.style.cursor = 'zoom-in';
+    addEnlargeHint(host);
+    host.onclick = function () { openLightbox(slides, host.__index || 0, meta || {}); };
+  }
+
+  function priceMarkup(room, accent, large) {
+    var price = roomPrice(room);
+    var unit = pickRow(room, 'unit', state.lang) || '';
+    return '<span style="font-family:\'Newsreader\',serif;font-size:' + (large ? '34px' : '30px') +
+      ';font-weight:600;color:' + accent + '">' + (String(price).indexOf('$') >= 0 ? '' : '$') + escapeHtml(price) +
+      '</span><span style="font-size:' + (large ? '14px' : '13px') + ';color:#9a927f;margin-left:3px">' +
+      escapeHtml(unit) + '</span>';
+  }
+
+  function buildRoomCard(room, index, lang) {
+    var accent = ROOM_ACCENTS[index % ROOM_ACCENTS.length];
+    var note = pickRow(room, 'note', lang);
+    var card = document.createElement('div');
+    card.setAttribute('style', 'background:#fff;border:1px solid #ece3d3;border-radius:20px;' +
+      'box-shadow:0 10px 30px rgba(60,50,30,.06);display:flex;flex-direction:column;overflow:hidden');
+    card.innerHTML =
+      '<div class="rphoto" style="height:190px"></div><div style="height:5px;background:' + accent + '"></div>' +
+      '<div style="padding:24px 24px 26px;display:flex;flex-direction:column;flex:1">' +
+      '<div class="rn" style="font-family:\'Newsreader\',\'Noto Serif TC\',serif;font-weight:600;color:#2f2b22;font-size:21px;margin-bottom:8px"></div>' +
+      '<div class="rd" style="color:#726b5c;font-size:14.5px;line-height:1.6;flex:1;margin-bottom:16px;white-space:pre-line"></div>' +
+      '<div style="display:flex;align-items:baseline;gap:4px">' + priceMarkup(room, accent, false) + '</div>' +
+      (note ? '<div class="rt" style="font-size:12.5px;color:#9a927f;margin-top:12px;padding-top:12px;border-top:1px dashed #ece3d3;white-space:pre-line"></div>' : '') +
+      '</div>';
+
+    var name = pickRow(room, 'name', lang) || '';
+    var description = pickRow(room, 'description', lang) || '';
+    card.querySelector('.rn').textContent = name;
+    card.querySelector('.rd').textContent = description;
+    if (note) card.querySelector('.rt').textContent = note;
+
+    setupPhotoHost(card.querySelector('.rphoto'), roomSlides(room), {
+      name: name, description: description, priceHtml: priceMarkup(room, accent, false)
+    });
+    return card;
+  }
+
+  function buildFeaturedRoom(room, lang) {
+    var accent = '#2f8f57';
+    var note = pickRow(room, 'note', lang);
+    var wrap = document.createElement('div');
+    wrap.setAttribute('style', 'display:flex;flex-wrap:wrap;background:#fff;border:1px solid #ece3d3;' +
+      'border-radius:26px;overflow:hidden;box-shadow:0 22px 50px rgba(60,50,30,.10);max-width:1000px;margin:0 auto');
+    wrap.innerHTML =
+      '<div class="rphoto" style="flex:1 1 480px;min-width:300px;min-height:380px"></div>' +
+      '<div style="flex:1 1 360px;min-width:280px;padding:clamp(28px,4vw,48px);display:flex;flex-direction:column;justify-content:center">' +
+      '<div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">' +
+      '<span style="width:22px;height:2px;background:' + accent + ';border-radius:2px"></span>' +
+      '<span style="font-size:11.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:' + accent + '">' +
+      (lang === 'en' ? 'Our room' : '我們的房型') + '</span></div>' +
+      '<div class="rn" style="font-family:\'Newsreader\',\'Noto Serif TC\',serif;font-weight:600;color:#2f2b22;font-size:clamp(24px,3vw,31px);margin-bottom:12px;line-height:1.15"></div>' +
+      '<div class="rd" style="color:#6b6558;font-size:15.5px;line-height:1.7;margin-bottom:20px;white-space:pre-line"></div>' +
+      '<div style="display:flex;align-items:baseline;gap:4px;margin-bottom:' + (note ? '14px' : '24px') + '">' +
+      priceMarkup(room, accent, true) + '</div>' +
+      (note ? '<div class="rt" style="font-size:13px;color:#9a927f;margin-bottom:24px;padding-top:14px;border-top:1px dashed #ece3d3;white-space:pre-line"></div>' : '') +
+      '<a href="#apply" style="align-self:flex-start;display:inline-flex;align-items:center;gap:8px;background:#ec6a45;' +
+      'color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 26px;border-radius:999px;' +
+      'box-shadow:0 10px 24px rgba(236,106,69,.26)">' + (lang === 'en' ? 'Apply online' : '線上申請') + '</a></div>';
+
+    var name = pickRow(room, 'name', lang) || '';
+    var description = pickRow(room, 'description', lang) || '';
+    wrap.querySelector('.rn').textContent = name;
+    wrap.querySelector('.rd').textContent = description;
+    if (note) wrap.querySelector('.rt').textContent = note;
+
+    setupPhotoHost(wrap.querySelector('.rphoto'), roomSlides(room), {
+      name: name, description: description, priceHtml: priceMarkup(room, accent, true)
+    });
+    return wrap;
+  }
+
+  function renderRooms(rooms, lang) {
+    var host = document.getElementById('rooms-list');
+    if (!host) return;
+
+    var list = roomsToRender(rooms);
+    host.innerHTML = '';
+
+    if (list.length === 1) {
+      host.setAttribute('style', 'margin-top:44px;display:block');
+      host.appendChild(buildFeaturedRoom(list[0], lang));
+    } else {
+      host.setAttribute('style', 'margin-top:44px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,340px));' +
+        'gap:22px;justify-content:center');
+      list.forEach(function (room, index) { host.appendChild(buildRoomCard(room, index, lang)); });
+    }
+  }
+
+  function applyHeroPhotos(urls) {
+    var hero = document.getElementById('heroPhoto');
+    if (!hero) return;
+
+    var slides = urls.length
+      ? urls.map(function (url) { return { url: url }; })
+      : DEMO_GRADIENTS.map(function (gradient) {
+          return { gradient: gradient, labelZh: '農場實景', labelEn: 'Farm photo' };
+        });
+
+    if (urls.length) {
+      var placeholder = document.getElementById('heroPhotoPh');
+      if (placeholder) placeholder.style.display = 'none';
+    }
+
+    hero.style.cursor = 'zoom-in';
+    addEnlargeHint(hero);
+    hero.onclick = function () {
+      var siteName = document.querySelector('[data-content="site_name"]');
+      openLightbox(slides, 0, { name: siteName ? siteName.textContent : '彩虹星民宿' });
+    };
+
+    if (urls.length) {
+      hero.style.backgroundImage = 'url("' + urls[0].replace(/"/g, '%22') + '")';
+      hero.style.backgroundSize = 'cover';
+      hero.style.backgroundPosition = 'center';
+    }
+  }
+
+  function applySceneryPhotos(settings) {
+    ['1', '2', '3'].forEach(function (n) {
+      var tile = document.querySelector('#nearby [data-scenery="' + n + '"]');
+      if (!tile) return;
+
+      var urls = splitUrls(settings['scenery' + n + '_photos'] || settings['scenery' + n]);
+      var label = tile.querySelector('span[data-zh]');
+      var labelZh = label ? label.getAttribute('data-zh') : '';
+      var labelEn = label ? label.getAttribute('data-en') : '';
+
+      tile.style.cursor = 'zoom-in';
+      addEnlargeHint(tile);
+
+      if (urls.length) {
+        tile.style.backgroundImage = 'url("' + urls[0].replace(/"/g, '%22') + '")';
+        tile.style.backgroundSize = 'cover';
+        tile.style.backgroundPosition = 'center';
+        Array.prototype.forEach.call(tile.children, function (child) {
+          if (!child.classList || !child.classList.contains('rbzoom')) child.style.display = 'none';
+        });
+      }
+
+      tile.onclick = function () {
+        var slides = urls.length
+          ? urls.map(function (url) { return { url: url }; })
+          : DEMO_GRADIENTS.map(function (gradient) {
+              return { gradient: gradient, labelZh: labelZh, labelEn: labelEn };
+            });
+        openLightbox(slides, 0, { name: state.lang === 'en' ? labelEn : labelZh });
+      };
+    });
+  }
 
   return {
     parseStyleText: parseStyleText,
@@ -345,7 +688,17 @@ var Rainbowstar = (function () {
     applyLang: applyLang,
     toggleLang: toggleLang,
     updateNav: updateNav,
-    toggleMenu: toggleMenu
+    toggleMenu: toggleMenu,
+    DEFAULT_ROOMS: DEFAULT_ROOMS,
+    roomsToRender: roomsToRender,
+    collectPhotos: collectPhotos,
+    roomPrice: roomPrice,
+    buildCarousel: buildCarousel,
+    openLightbox: openLightbox,
+    closeLightbox: closeLightbox,
+    renderRooms: renderRooms,
+    applyHeroPhotos: applyHeroPhotos,
+    applySceneryPhotos: applySceneryPhotos
   };
 })();
 
