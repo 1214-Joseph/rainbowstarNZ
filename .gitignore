@@ -2,3 +2,5 @@ Thumbs.db
 .DS_Store
 desktop.ini
 .superpowers/
+.playwright-mcp/
+test_initial.log
