@@ -231,3 +231,146 @@ test('handlePost_ flags suspicious data in the data-check column', () => {
   const rows = ss.getSheetByName('住宿申請').rows;
   assert.match(rows[1][rows[1].length - 1], /電話可疑/);
 });
+
+test('logError_ creates the errors sheet with a header row on first use', () => {
+  const ss = fakeWritableSpreadsheet({});
+  code.logError_(ss, 'test context', 'test detail');
+
+  const errorSheet = ss.getSheetByName('errors');
+  assert.ok(errorSheet, 'errors sheet was created');
+  assert.deepEqual(errorSheet.rows[0], ['時間', '情境', '詳情'], 'header row is present');
+  assert.equal(errorSheet.rows.length, 2, 'one data row was appended');
+  assert.equal(errorSheet.rows[1][1], 'test context', 'context column is correct');
+  assert.equal(errorSheet.rows[1][2], 'test detail', 'detail column is correct');
+});
+
+test('logError_ appends to the errors sheet without repeating the header on second use', () => {
+  const ss = fakeWritableSpreadsheet({});
+  code.logError_(ss, 'context 1', 'detail 1');
+  code.logError_(ss, 'context 2', 'detail 2');
+
+  const errorSheet = ss.getSheetByName('errors');
+  assert.equal(errorSheet.rows.length, 3, 'two data rows plus one header');
+  assert.deepEqual(errorSheet.rows[0], ['時間', '情境', '詳情'], 'header row unchanged');
+  assert.equal(errorSheet.rows[1][1], 'context 1');
+  assert.equal(errorSheet.rows[2][1], 'context 2');
+});
+
+test('when the response sheet appendRow throws, handlePost_ returns ok:false and logs the error', () => {
+  const ss = fakeWritableSpreadsheet({});
+  ss.insertSheet('住宿申請').appendRow = () => { throw new Error('Sheet is locked'); };
+  global.MailApp = { sendEmail: () => {} };
+  global.Session = { getEffectiveUser: () => ({ getEmail: () => 'fallback@example.com' }) };
+
+  const result = code.handlePost_(ss, {
+    parameter: { type: 'accommodation', name_zh: '王美' },
+    parameters: {}
+  }, STAMP);
+
+  assert.equal(result.ok, false, 'handlePost_ returns ok:false');
+  assert.match(result.error, /locked/i, 'error message mentions the thrown error');
+
+  const errorSheet = ss.getSheetByName('errors');
+  assert.ok(errorSheet, 'errors sheet was created');
+  assert.equal(errorSheet.rows.length, 2, 'header row plus one error row');
+  assert.equal(errorSheet.rows[1][1], 'doPost', 'context is "doPost"');
+  assert.match(String(errorSheet.rows[1][2]), /locked/i, 'detail mentions the thrown message');
+});
+
+test('when logError_ itself throws, handlePost_ still returns ok:false and does not propagate the error', () => {
+  const ss = fakeWritableSpreadsheet({});
+  ss.insertSheet('住宿申請').appendRow = () => { throw new Error('Append failed'); };
+  // Make logError_ throw by making insertSheet fail after the errors sheet is created
+  let insertSheetCallCount = 0;
+  const origInsertSheet = ss.insertSheet.bind(ss);
+  ss.insertSheet = (name) => {
+    insertSheetCallCount++;
+    if (name === 'errors' && insertSheetCallCount > 1) {
+      throw new Error('Cannot create sheet');
+    }
+    return origInsertSheet(name);
+  };
+
+  global.MailApp = { sendEmail: () => {} };
+  global.Session = { getEffectiveUser: () => ({ getEmail: () => 'fallback@example.com' }) };
+
+  // First call should succeed in creating the errors sheet
+  code.handlePost_(ss, {
+    parameter: { type: 'accommodation', name_zh: '王美' },
+    parameters: {}
+  }, STAMP);
+
+  // Reset for second call where logError_ will fail
+  insertSheetCallCount = 0;
+  ss.insertSheet = (name) => {
+    if (name === 'errors') {
+      throw new Error('Cannot create sheet');
+    }
+    return origInsertSheet(name);
+  };
+
+  let caughtError = false;
+  try {
+    code.handlePost_(ss, {
+      parameter: { type: 'accommodation', name_zh: '王美' },
+      parameters: {}
+    }, STAMP);
+  } catch (e) {
+    caughtError = true;
+  }
+
+  assert.equal(caughtError, false, 'handlePost_ did not throw');
+});
+
+test('a submission with an unrecognised type value still records and logs as unknown type', () => {
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['notify_email', 'owner@example.com']])
+  });
+  global.MailApp = { sendEmail: () => {} };
+
+  const result = code.handlePost_(ss, {
+    parameter: { type: 'work_exchange', name_zh: '王美' },
+    parameters: {}
+  }, STAMP);
+
+  assert.equal(result.ok, true, 'submission is still recorded');
+  const accomSheet = ss.getSheetByName('住宿申請');
+  assert.ok(accomSheet, 'recorded in accommodation tab (default)');
+  assert.equal(accomSheet.rows.length, 2, 'header plus one data row');
+
+  const errorSheet = ss.getSheetByName('errors');
+  assert.ok(errorSheet, 'errors sheet was created');
+  assert.equal(errorSheet.rows.length, 2, 'header plus one error row');
+  assert.equal(errorSheet.rows[1][1], 'unknown type', 'context is "unknown type"');
+  assert.equal(errorSheet.rows[1][2], 'work_exchange', 'detail names the received value');
+});
+
+test('a submission with type exactly "workexchange" does not log an error', () => {
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['notify_email', 'owner@example.com']])
+  });
+  global.MailApp = { sendEmail: () => {} };
+
+  code.handlePost_(ss, {
+    parameter: { type: 'workexchange', name_zh: '王美' },
+    parameters: {}
+  }, STAMP);
+
+  const errorSheet = ss.getSheetByName('errors');
+  assert.equal(errorSheet, null, 'no errors sheet was created');
+});
+
+test('a submission with no type field does not log an error', () => {
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([['key', 'value'], ['notify_email', 'owner@example.com']])
+  });
+  global.MailApp = { sendEmail: () => {} };
+
+  code.handlePost_(ss, {
+    parameter: { name_zh: '王美' },
+    parameters: {}
+  }, STAMP);
+
+  const errorSheet = ss.getSheetByName('errors');
+  assert.equal(errorSheet, null, 'no errors sheet was created');
+});

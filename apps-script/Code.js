@@ -18,6 +18,7 @@ var SHEET_ROOMS = 'rooms';
 var SHEET_LISTS = 'workexchange_lists';
 var SHEET_STAY = '住宿申請';
 var SHEET_WORK = '換宿申請';
+var SHEET_ERRORS = 'errors';
 
 /** Reads the settings tab's A/B columns into a plain key-value object. */
 function readSettings_(ss) {
@@ -108,6 +109,20 @@ function sendNotifyEmail_(settings, type, fields, get, flag) {
 }
 
 /**
+ * Logs an error to the errors sheet. Creates the sheet on first use and ensures
+ * the header row is present. The timestamp is added automatically.
+ */
+function logError_(ss, context, detail) {
+  var sheet = ss.getSheetByName(SHEET_ERRORS) || ss.insertSheet(SHEET_ERRORS);
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['時間', '情境', '詳情']);
+  }
+
+  sheet.appendRow([new Date(), context, String(detail)]);
+}
+
+/**
  * The testable core of doPost.
  *
  * It never rejects. The visitor may be posting with mode:'no-cors', in which
@@ -117,6 +132,16 @@ function sendNotifyEmail_(settings, type, fields, get, flag) {
 function handlePost_(ss, e, timestamp) {
   var parameter = (e && e.parameter) || {};
   var parameters = (e && e.parameters) || {};
+
+  // Check if the type is present but unrecognised (not 'workexchange' or 'accommodation').
+  var typeValue = String(parameter.type || '').trim();
+  if (typeValue && typeValue !== 'workexchange' && typeValue !== 'accommodation') {
+    try {
+      logError_(ss, 'unknown type', typeValue);
+    } catch (logErr) {
+      // Swallowed: if the error log fails, we must not turn one failure into two.
+    }
+  }
 
   var type = parameter.type === 'workexchange' ? 'workexchange' : 'accommodation';
   var fields = type === 'workexchange' ? WORK_FIELDS : ACCOM_FIELDS;
@@ -137,6 +162,12 @@ function handlePost_(ss, e, timestamp) {
 
     return { ok: true, message: '申請已送出 / Application received' };
   } catch (error) {
+    // Log the error before returning, but swallow any failure of the error log itself.
+    try {
+      logError_(ss, 'doPost', error);
+    } catch (logErr) {
+      // Swallowed: if the error log fails, we must not turn one failure into two.
+    }
     return { ok: false, error: String(error) };
   }
 }
@@ -160,6 +191,7 @@ if (typeof module !== 'undefined' && module.exports) {
     SHEET_LISTS: SHEET_LISTS,
     SHEET_STAY: SHEET_STAY,
     SHEET_WORK: SHEET_WORK,
+    SHEET_ERRORS: SHEET_ERRORS,
     readSettings_: readSettings_,
     readTableRows_: readTableRows_,
     readRooms_: readRooms_,
@@ -167,6 +199,7 @@ if (typeof module !== 'undefined' && module.exports) {
     buildContentPayload_: buildContentPayload_,
     appendResponse_: appendResponse_,
     sendNotifyEmail_: sendNotifyEmail_,
+    logError_: logError_,
     handlePost_: handlePost_,
     __lib: lib
   };
