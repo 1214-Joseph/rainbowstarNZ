@@ -5,6 +5,7 @@
   "description": "Rainbowstar farmstay website: static front end, Google Apps Script back end.",
   "type": "commonjs",
   "scripts": {
-    "test": "node --test tests/**/*.test.js"
+    "test": "node --test tests/**/*.test.js",
+    "build:defaults": "node scripts/build-defaults.js"
   }
 }

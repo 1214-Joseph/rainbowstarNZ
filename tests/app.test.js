@@ -113,3 +113,105 @@ test('escapeHtml neutralises markup so sheet content cannot inject elements', ()
   assert.equal(app.escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
   assert.equal(app.escapeHtml('a & "b" \'c\''), 'a &amp; &quot;b&quot; &#39;c&#39;');
 });
+
+const { execFileSync } = require('node:child_process');
+const path = require('node:path');
+const { readSheetCsv } = require('../scripts/csv.js');
+
+/** Reads the seeded CSV so the front-end fallback cannot drift away from it. */
+function seededLists() {
+  const lists = { rules: [], duties_out: [], duties_in: [] };
+  readSheetCsv('workexchange_lists.csv').slice(1)
+    .filter((r) => r[0] in lists)
+    .forEach((r) => lists[r[0]].push({ zh: r[2], en: r[3] }));
+  return lists;
+}
+
+test('DEFAULT_LISTS is byte-for-byte the seeded CSV content', () => {
+  assert.deepEqual(app.DEFAULT_LISTS, seededLists());
+});
+
+test('site/app.js is not stale with respect to the seed CSV', () => {
+  const script = path.join(__dirname, '..', 'scripts', 'build-defaults.js');
+  assert.doesNotThrow(
+    () => execFileSync(process.execPath, [script, '--check'], { stdio: 'pipe' }),
+    'run: npm run build:defaults'
+  );
+});
+
+test('listItemsFor prefers back-end data and falls back to the built-in defaults', () => {
+  const fromServer = { rules: [{ zh: '伺服器規則', en: 'Server rule' }] };
+  assert.deepEqual(app.listItemsFor(fromServer, 'rules'), fromServer.rules);
+  assert.deepEqual(app.listItemsFor({ rules: [] }, 'rules'), app.DEFAULT_LISTS.rules);
+  assert.deepEqual(app.listItemsFor(null, 'duties_in'), app.DEFAULT_LISTS.duties_in);
+});
+
+/** A stand-in host element recording the children renderList appends. */
+function fakeHost() {
+  const children = [];
+  return {
+    children,
+    innerHTML: '',
+    appendChild: (child) => children.push(child),
+    querySelectorAll: () => children
+  };
+}
+
+/** renderList builds real elements, so give it a document just rich enough. */
+function installFakeDocument() {
+  global.document = {
+    createElement: () => {
+      const el = {
+        children: [],
+        attributes: {},
+        textContent: '',
+        innerHTML: '',
+        setAttribute(name, value) { this.attributes[name] = value; },
+        getAttribute(name) { return name in this.attributes ? this.attributes[name] : null; },
+        appendChild(child) { this.children.push(child); return child; },
+        querySelector: () => null
+      };
+      return el;
+    }
+  };
+}
+
+test('renderList numbers the rules and stores both languages on each item', () => {
+  installFakeDocument();
+  const host = fakeHost();
+  app.renderList(host, [{ zh: '第一條', en: 'Rule one' }, { zh: '第二條', en: 'Rule two' }], 'rule', 'zh');
+
+  assert.equal(host.children.length, 2);
+  const firstText = host.children[0].children[1];
+  assert.equal(firstText.textContent, '第一條');
+  assert.equal(firstText.getAttribute('data-zh'), '第一條');
+  assert.equal(firstText.getAttribute('data-en'), 'Rule one');
+  assert.equal(host.children[0].children[0].textContent, '1');
+  assert.equal(host.children[1].children[0].textContent, '2');
+});
+
+test('renderList shows the English text when the language is English', () => {
+  installFakeDocument();
+  const host = fakeHost();
+  app.renderList(host, [{ zh: '餵貓', en: 'Feed the cats' }], 'out', 'en');
+  assert.equal(host.children[0].children[1].textContent, 'Feed the cats');
+});
+
+test('renderList is idempotent: rendering twice does not duplicate items', () => {
+  installFakeDocument();
+  const host = fakeHost();
+  const items = [{ zh: '甲', en: 'A' }];
+
+  app.renderList(host, items, 'rule', 'zh');
+  host.children.length = 0;          // innerHTML = '' is what the real code does
+  app.renderList(host, items, 'rule', 'zh');
+
+  assert.equal(host.children.length, 1, 'no dataset.done guard blocks the second render');
+});
+
+test('renderList tolerates an empty item list', () => {
+  installFakeDocument();
+  const host = fakeHost();
+  assert.doesNotThrow(() => app.renderList(host, [], 'rule', 'zh'));
+  assert.equal(host.children.length, 0);
+});
