@@ -341,8 +341,156 @@
     renderListEditors(host);
   }
 
-  /** Filled in by Task 19. */
-  function renderPhotoManager(section, photosValue) { void section; void photosValue; return document.createElement('div'); }
+  var MAX_IMAGE_EDGE = 1600;
+
+  function splitUrls(value) {
+    if (!value) return [];
+    var urls = [];
+    String(value).split(/[\n,|]+/).forEach(function (raw) {
+      var url = raw.trim();
+      if (url && urls.indexOf(url) < 0) urls.push(url);
+    });
+    return urls;
+  }
+
+  /**
+   * Shrinks a photo before upload.
+   *
+   * A phone photo is several megabytes, base64 inflates it by a third, and
+   * google.script.run caps its arguments. 1600px is also the width the CDN link
+   * requests, so nothing visible is lost.
+   */
+  function downscaleImage(file, maxEdge) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('讀取檔案失敗')); };
+      reader.onload = function () {
+        var image = new Image();
+        image.onerror = function () { reject(new Error('這不是有效的圖片檔')); };
+        image.onload = function () {
+          var scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(image.width * scale);
+          canvas.height = Math.round(image.height * scale);
+          canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+
+          var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve({ base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /** Keeps CONTENT in step with the sheet, so a later saveContent cannot undo a photo change. */
+  function updatePhotoState(section, urls) {
+    var joined = urls.join('\n');
+    var roomMatch = section.match(/^room-(\d+)$/);
+
+    if (roomMatch) {
+      CONTENT.rooms[Number(roomMatch[1])].photos = joined;
+      return;
+    }
+    var key = section === 'hero' ? 'hero_photos' : 'scenery' + section.split('-')[1] + '_photos';
+    CONTENT.settings = CONTENT.settings || {};
+    CONTENT.settings[key] = joined;
+  }
+
+  function renderPhotoManager(section, photosValue) {
+    var wrap = el('div', {});
+    wrap.style.marginTop = '14px';
+
+    var status = el('div', { class: 'msg' });
+    var grid = el('div', {});
+    grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin:10px 0';
+
+    var urls = splitUrls(photosValue);
+
+    function persistOrder() {
+      runAuth('reorderPhotos', section, urls).then(function (result) {
+        updatePhotoState(section, result.urls);
+        urls = result.urls;
+        paint();
+      }).catch(function (error) { setMsg(status, 'err', '排序失敗：' + error); });
+    }
+
+    function paint() {
+      grid.innerHTML = '';
+      if (!urls.length) {
+        grid.appendChild(el('div', { text: '（尚無照片）' }));
+      }
+
+      urls.forEach(function (url, index) {
+        var tile = el('div', {});
+        tile.draggable = true;
+        tile.style.cssText = 'position:relative;width:120px;height:90px;border-radius:10px;overflow:hidden;' +
+          'border:1px solid #e4dccb;background:#f2ece0 center/cover no-repeat;cursor:grab';
+        tile.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")';
+
+        tile.addEventListener('dragstart', function (event) { event.dataTransfer.setData('text/plain', String(index)); });
+        tile.addEventListener('dragover', function (event) { event.preventDefault(); });
+        tile.addEventListener('drop', function (event) {
+          event.preventDefault();
+          var from = Number(event.dataTransfer.getData('text/plain'));
+          if (from === index) return;
+          var moved = urls.splice(from, 1)[0];
+          urls.splice(index, 0, moved);
+          persistOrder();
+        });
+
+        var remove = el('button', { type: 'button', text: '×' });
+        remove.style.cssText = 'position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;' +
+          'border:0;background:rgba(255,255,255,.92);color:#b3401f;font-weight:700;cursor:pointer';
+        remove.onclick = function () {
+          if (!confirm('確定刪除這張照片？')) return;
+          runAuth('deletePhoto', section, url).then(function (result) {
+            updatePhotoState(section, result.urls);
+            urls = result.urls;
+            paint();
+          }).catch(function (error) { setMsg(status, 'err', '刪除失敗：' + error); });
+        };
+        tile.appendChild(remove);
+        grid.appendChild(tile);
+      });
+    }
+
+    var picker = el('input', { type: 'file', accept: 'image/*' });
+    picker.multiple = true;
+    picker.onchange = function () {
+      var files = Array.prototype.slice.call(picker.files);
+      picker.value = '';
+      if (!files.length) return;
+
+      setMsg(status, 'ok', '上傳中… (0/' + files.length + ')');
+      var done = 0;
+
+      files.reduce(function (chain, file) {
+        return chain.then(function () {
+          return downscaleImage(file, MAX_IMAGE_EDGE).then(function (image) {
+            return runAuth('uploadPhoto', section, file.name, image.base64, image.mimeType);
+          }).then(function (result) {
+            updatePhotoState(section, result.urls);
+            urls = result.urls;
+            done++;
+            setMsg(status, 'ok', '上傳中… (' + done + '/' + files.length + ')');
+            paint();
+          });
+        });
+      }, Promise.resolve()).then(function () {
+        setMsg(status, 'ok', '已上傳 ' + done + ' 張照片。');
+      }).catch(function (error) {
+        setMsg(status, 'err', '上傳失敗：' + error);
+      });
+    };
+
+    wrap.appendChild(el('label', { text: '照片（可多張；拖曳縮圖可調整順序）' }));
+    wrap.appendChild(grid);
+    wrap.appendChild(picker);
+    wrap.appendChild(status);
+    paint();
+    return wrap;
+  }
   /** Filled in by Task 20. */
   function renderListEditors(host) { void host; }
 

@@ -73,3 +73,25 @@ test('site_name, the contact fields and notify_email are marked untranslatable',
     assert.match(admin, entry, `${key} should not offer an English field`);
   }
 });
+
+test('photos are uploaded, deleted and reordered through authenticated calls', () => {
+  assert.match(admin, /runAuth\(\s*'uploadPhoto'\s*,\s*section\s*,/);
+  assert.match(admin, /runAuth\(\s*'deletePhoto'\s*,\s*section\s*,/);
+  assert.match(admin, /runAuth\(\s*'reorderPhotos'\s*,\s*section\s*,/);
+});
+
+test('images are downscaled in the browser before upload', () => {
+  assert.match(admin, /MAX_IMAGE_EDGE\s*=\s*1600/);
+  assert.match(admin, /function downscaleImage/);
+  assert.match(admin, /createElement\('canvas'\)/);
+});
+
+test('the upload input only accepts images and allows several at once', () => {
+  assert.match(admin, /type:\s*'file'[\s\S]{0,120}accept:\s*'image\/\*'/);
+  assert.match(admin, /multiple/);
+});
+
+test('the photo manager writes returned URLs back into CONTENT so a later save cannot clobber them', () => {
+  assert.match(admin, /function updatePhotoState/);
+  assert.match(admin, /updatePhotoState\(section,\s*result\.urls\)/);
+});
