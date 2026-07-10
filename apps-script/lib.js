@@ -160,9 +160,14 @@ function applicantName_(get) {
   return get('name_zh') || get('name_en') || get('email') || '(未具名)';
 }
 
+function singleLine_(value) {
+  return String(value || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function buildEmailSubject(type, get, flag) {
-  var suffix = flag ? '（' + flag + '）' : '';
-  return '【彩虹星民宿】新' + typeLabel_(type) + ' - ' + applicantName_(get) + suffix;
+  var sanitizedFlag = singleLine_(flag);
+  var suffix = sanitizedFlag ? '（' + sanitizedFlag + '）' : '';
+  return '【彩虹星民宿】新' + typeLabel_(type) + ' - ' + singleLine_(applicantName_(get)) + suffix;
 }
 
 function buildEmailBody(type, fields, get, flag) {

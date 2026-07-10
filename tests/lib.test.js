@@ -199,3 +199,32 @@ test('buildEmailBody leads with a warning line when data looks suspicious', () =
   const body = lib.buildEmailBody('accommodation', [['a', '甲']], getter({ a: 'A' }), '⚠️ 電話可疑');
   assert.match(body, /⚠️ 系統提醒：⚠️ 電話可疑/);
 });
+
+test('buildEmailSubject sanitizes newlines in applicant name', () => {
+  const subject = lib.buildEmailSubject('accommodation', getter({ name_zh: '王美\r\n攻擊' }), '');
+  assert.doesNotMatch(subject, /\r/);
+  assert.doesNotMatch(subject, /\n/);
+  assert.match(subject, /王美/);
+  assert.match(subject, /攻擊/);
+});
+
+test('buildEmailSubject neutralizes header injection attempt in name', () => {
+  const subject = lib.buildEmailSubject('accommodation', getter({ name_zh: '王美\r\nBcc: attacker@example.com' }), '');
+  assert.doesNotMatch(subject, /\r/);
+  assert.doesNotMatch(subject, /\n/);
+  assert.match(subject, /王美/);
+  assert.match(subject, /attacker@example\.com/);
+});
+
+test('buildEmailSubject sanitizes newlines in suspicious flag', () => {
+  const subject = lib.buildEmailSubject('accommodation', getter({ name_zh: '王美' }), '⚠️ 電話\r\n可疑');
+  assert.doesNotMatch(subject, /\r/);
+  assert.doesNotMatch(subject, /\n/);
+  assert.match(subject, /電話/);
+  assert.match(subject, /可疑/);
+});
+
+test('buildEmailSubject produces unchanged output for ordinary names without newlines', () => {
+  const subject = lib.buildEmailSubject('accommodation', getter({ name_zh: '王美' }), '⚠️ 電話可疑');
+  assert.equal(subject, '【彩虹星民宿】新住宿申請 Accommodation - 王美（⚠️ 電話可疑）');
+});
