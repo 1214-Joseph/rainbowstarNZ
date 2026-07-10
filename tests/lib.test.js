@@ -294,3 +294,40 @@ test('listRowsFrom drops items that are blank in both languages', () => {
 test('LIST_NAMES holds exactly the three editable lists', () => {
   assert.deepEqual(lib.LIST_NAMES, ['rules', 'duties_out', 'duties_in']);
 });
+
+test('groupLists preserves a cell holding the number 0 as the string "0"', () => {
+  const rows = [{ list: 'rules', order: 1, text_zh: 0, text_en: 'Zero' }];
+  const grouped = lib.groupLists(rows);
+  assert.deepEqual(grouped.rules, [{ zh: '0', en: 'Zero' }]);
+});
+
+test('listRowsFrom preserves an item with zh: 0 as "0" and does not drop it', () => {
+  const items = [{ zh: 0, en: 'Zero' }];
+  const rows = lib.listRowsFrom('rules', items);
+  assert.deepEqual(rows, [['rules', 1, '0', 'Zero']]);
+});
+
+test('listRowsFrom preserves an item with zh: false as "false" and does not drop it', () => {
+  const items = [{ zh: false, en: 'Bool' }];
+  const rows = lib.listRowsFrom('rules', items);
+  assert.deepEqual(rows, [['rules', 1, 'false', 'Bool']]);
+});
+
+test('whitespace is trimmed identically by groupLists and listRowsFrom for round-tripping', () => {
+  const rows = [{ list: 'rules', order: 1, text_zh: '  hello  ', text_en: '  world  ' }];
+  const grouped = lib.groupLists(rows);
+  assert.equal(grouped.rules[0].zh, 'hello');
+  assert.equal(grouped.rules[0].en, 'world');
+  const items = grouped.rules;
+  const newRows = lib.listRowsFrom('rules', items);
+  assert.deepEqual(newRows, [['rules', 1, 'hello', 'world']]);
+});
+
+test('both functions still drop rows blank in both languages', () => {
+  const rows = [{ list: 'rules', order: 1, text_zh: '', text_en: '' }];
+  const grouped = lib.groupLists(rows);
+  assert.deepEqual(grouped.rules, []);
+  const items = [{ zh: '', en: '' }];
+  const newRows = lib.listRowsFrom('rules', items);
+  assert.deepEqual(newRows, []);
+});

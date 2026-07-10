@@ -164,6 +164,11 @@ function singleLine_(value) {
   return String(value || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function cellText_(value) {
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+}
+
 function buildEmailSubject(type, get, flag) {
   var sanitizedFlag = singleLine_(flag);
   var suffix = sanitizedFlag ? '（' + sanitizedFlag + '）' : '';
@@ -192,8 +197,8 @@ function groupLists(rows) {
     var listName = String(row.list || '').trim();
     if (LIST_NAMES.indexOf(listName) < 0) return;
 
-    var zh = String(row.text_zh === undefined || row.text_zh === null ? '' : row.text_zh).trim();
-    var en = String(row.text_en === undefined || row.text_en === null ? '' : row.text_en).trim();
+    var zh = cellText_(row.text_zh);
+    var en = cellText_(row.text_en);
     if (!zh && !en) return;
 
     var order = Number(row.order);
@@ -213,8 +218,8 @@ function groupLists(rows) {
 function listRowsFrom(listName, items) {
   var rows = [];
   (items || []).forEach(function (item) {
-    var zh = String(item.zh || '').trim();
-    var en = String(item.en || '').trim();
+    var zh = cellText_(item.zh);
+    var en = cellText_(item.en);
     if (!zh && !en) return;
     rows.push([listName, rows.length + 1, zh, en]);
   });
