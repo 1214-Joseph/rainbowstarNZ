@@ -155,12 +155,24 @@ var Rainbowstar = (function () {
     });
   }
 
+  /**
+   * Single-value settings with no _en counterpart (the admin shows them as one
+   * field). Looking these up as English would come back undefined and leave the
+   * markup's stale built-in text on an EN-mode page load.
+   */
+  var UNTRANSLATABLE_CONTENT = { site_name: true, contact_email: true, contact_line: true };
+
+  /** settingValue, except untranslatable keys resolve in every language. */
+  function contentValue(settings, key, lang) {
+    return settingValue(settings, key, UNTRANSLATABLE_CONTENT[key] ? 'zh' : lang);
+  }
+
   function applyContent(data, lang) {
     state.data = data;
     var settings = (data && data.settings) || {};
 
     Array.prototype.forEach.call(document.querySelectorAll('[data-content]'), function (el) {
-      var value = settingValue(settings, el.getAttribute('data-content'), lang);
+      var value = contentValue(settings, el.getAttribute('data-content'), lang);
       if (value === undefined) return;  // keep the markup's own data-zh / data-en text
       el.innerHTML = value.indexOf('\n') >= 0
         ? escapeHtml(value).replace(/\n/g, '<br>')
@@ -922,6 +934,7 @@ var Rainbowstar = (function () {
     settingValue: settingValue,
     pickRow: pickRow,
     escapeHtml: escapeHtml,
+    contentValue: contentValue,
     applyContent: applyContent,
     loadContent: loadContent,
     DEFAULT_LISTS: DEFAULT_LISTS,

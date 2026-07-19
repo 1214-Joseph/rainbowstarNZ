@@ -98,6 +98,15 @@ test('settingValue returns undefined in English when no _en exists, so data-en s
   assert.equal(app.settingValue({ tagline: '標語' }, 'tagline', 'zh'), '標語');
 });
 
+test('contentValue resolves untranslatable settings in English mode, so an edited site name survives an EN-mode page load', () => {
+  assert.equal(app.contentValue({ site_name: '彩虹星 123' }, 'site_name', 'en'), '彩虹星 123');
+  assert.equal(app.contentValue({ contact_email: 'a@b.co' }, 'contact_email', 'en'), 'a@b.co');
+  assert.equal(app.contentValue({ contact_line: '021-000' }, 'contact_line', 'en'), '021-000');
+  // Translatable keys keep the missing-_en guard: undefined preserves the markup's built-in English.
+  assert.equal(app.contentValue({ tagline: '標語' }, 'tagline', 'en'), undefined);
+  assert.equal(app.contentValue({ tagline: '標語', tagline_en: 'Tagline' }, 'tagline', 'en'), 'Tagline');
+});
+
 test('pickRow falls back to Chinese in English mode, because rooms have no markup fallback', () => {
   assert.equal(app.pickRow({ name: '主屋' }, 'name', 'en'), '主屋');
   assert.equal(app.pickRow({ name: '主屋', name_en: 'Dorm' }, 'name', 'en'), 'Dorm');
