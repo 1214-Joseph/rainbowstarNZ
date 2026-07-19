@@ -51,11 +51,9 @@ test('rooms.csv uses the canonical column order and lists the three room types',
 });
 
 test('rooms.csv room names match the room_type options offered by the booking form', () => {
-  const design = fs.readFileSync(
-    path.join(__dirname, '..', 'claude_design', '彩虹星民宿 Rainbowstar.dc.html'), 'utf8'
-  );
+  const site = fs.readFileSync(path.join(__dirname, '..', 'site', 'index.html'), 'utf8');
   for (const row of readCsv('rooms.csv').slice(1)) {
-    assert.ok(design.includes(`name="room_type" value="${row[0]}"`), `no room_type option for ${row[0]}`);
+    assert.ok(site.includes(`name="room_type" value="${row[0]}"`), `no room_type option for ${row[0]}`);
   }
 });
 
