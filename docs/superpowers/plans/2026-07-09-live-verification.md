@@ -66,6 +66,26 @@ or property getFolderById on object DriveApp.
 通知信三封（CORS 測試／端到端測試／換宿測試，回覆位址應為申請人 email）、
 標題列對調自我修復實驗、刪除所有測試列。
 
-## 補記 —【決策二】重測結果
+## 補記 —【決策二】重測結果（屬性修正後）
 
-（屬性修正後補填）
+`PHOTO_ROOT_FOLDER_ID` 改為純 ID 後，自後台「首頁」一次上傳兩張測試圖：
+
+- 後台顯示「已上傳 2 張照片。」，`hero_photos` 寫入兩行
+  `https://lh3.googleusercontent.com/d/<fileId>=w1600`
+- **匿名 curl 抓取兩個網址皆 `HTTP 200 / image/jpeg`** → Drive CDN 直連可用
+- **定案：`photoUrlFor_` 維持現狀（lh3 直連），不需要 `?img=` 代理。** 退路 A/B 皆未動用。
+- 拖曳排序：`reorderPhotos` 伺服器來回後順序對調並持久化 ✅
+- 刪除：兩張依序刪除（`deletePhoto` 雙重把關 + Drive 垃圾桶），`hero_photos` 回到空字串 ✅
+
+## 補記 — 公開站上線（Task 23 改用 GitHub Pages）
+
+計畫原寫 Cloudflare Pages；因 repo 已在 GitHub 且使用者屬意 GitHub Pages，改以
+`.github/workflows/pages.yml`（actions/deploy-pages）自 `site/` 發布：
+
+- 公開網址：https://1214-joseph.github.io/rainbowstarNZ/ （HTTP 200）
+- 於 github.io 網域實測：內容 JSON 跨源載入成功（顯示試算表編輯值）、
+  首頁大圖以剛上傳的 lh3 網址渲染成功。
+- 換宿表單以正確關鍵字 `type=workexchange` 重測：`ok:true`，`換宿申請` 分頁建立。
+  （先前 `type=work`／`type=bogus` 兩筆落入 `errors` 分頁並以住宿類型收下，
+  為「未知類型不丟件」的設計行為；亂碼僅存在於 Windows curl 直打的測試列，
+  瀏覽器表單路徑中文全程正確。）
