@@ -6,7 +6,7 @@
 <style>
   * { box-sizing: border-box; }
   body { margin:0; background:#fdfbf6; color:#2f2b22; font-family:'Noto Sans TC',system-ui,-apple-system,sans-serif; font-size:15px; line-height:1.6; }
-  .wrap { max-width:960px; margin:0 auto; padding:28px 20px 80px; }
+  .wrap { max-width:1180px; margin:0 auto; padding:28px 20px 80px; }
   h1 { font-size:22px; margin:0 0 4px; color:#1f6b40; }
   .sub { color:#9a927f; font-size:13px; margin-bottom:26px; }
   .card { background:#fff; border:1px solid #ece3d3; border-radius:16px; padding:22px; margin-bottom:18px; box-shadow:0 8px 24px rgba(60,50,30,.05); }
@@ -36,13 +36,86 @@
   .bar { position:sticky; bottom:0; background:rgba(253,251,246,.94); border-top:1px solid #ece3d3; padding:14px 20px; display:flex; gap:12px; justify-content:flex-end; }
   #login { max-width:380px; margin:14vh auto; }
   .schedule-wrap { overflow:auto; margin-top:12px; }
-  .schedule-table { width:100%; min-width:850px; border-collapse:collapse; font-size:13px; }
+  .schedule-table { width:100%; min-width:1120px; border-collapse:collapse; font-size:13px; }
   .schedule-table th { text-align:left; color:#6b6558; background:#f7f2e8; padding:9px 10px; border-bottom:1px solid #e4dccb; white-space:nowrap; }
   .schedule-table td { padding:10px; border-bottom:1px solid #eee7d9; vertical-align:top; }
   .schedule-table select { padding:7px 9px; border:1px solid #d8cdb8; border-radius:9px; background:#fff; }
   .schedule-type { display:inline-block; padding:3px 8px; border-radius:999px; background:#e7f4ec; color:#1f6b40; white-space:nowrap; }
+  .schedule-warning { color:#b3401f; font-weight:700; }
   .visibility-control { display:flex; align-items:center; gap:10px; margin:0 0 18px; padding:12px 14px; border-radius:12px; background:#eef7f1; color:#1f6b40; }
   .visibility-control input { width:20px; height:20px; accent-color:#2f8f57; }
+  .admin-shell { display:grid; grid-template-columns:210px minmax(0,1fr); gap:24px; align-items:start; }
+  .admin-nav { position:sticky; top:18px; background:#fff; border:1px solid #e7ddca; border-radius:18px; padding:10px; box-shadow:0 10px 28px rgba(60,50,30,.06); }
+  .admin-nav-title { padding:8px 10px 10px; color:#9a927f; font-size:12px; font-weight:700; letter-spacing:.08em; }
+  .admin-nav button { width:100%; min-height:48px; border:0; border-radius:12px; padding:10px 12px; background:transparent; color:#5c5648; font:inherit; font-weight:700; text-align:left; cursor:pointer; }
+  .admin-nav button:hover { background:#f7f2e8; }
+  .admin-nav button[aria-current="page"] { background:#e7f4ec; color:#1f6b40; box-shadow:inset 3px 0 #2f8f57; }
+  .admin-page[hidden] { display:none; }
+  .admin-page-heading { margin:0 0 18px; padding:2px 2px 0; }
+  .admin-page-heading h2 { margin:0 0 5px; color:#2f2b22; font-size:24px; }
+  .admin-page-heading p { margin:0; color:#8a836f; font-size:14px; }
+  .editor-section > h2 { padding-bottom:12px; border-bottom:1px solid #eee7d9; }
+  .editor-kind { display:inline-flex; margin-bottom:9px; color:#2f8f57; font-size:12px; font-weight:700; letter-spacing:.08em; }
+  .admin-nav-title { color:#1f6b40; font-size:13px; letter-spacing:0; }
+  .website-toolbar { position:sticky; top:12px; z-index:8; display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:16px; padding:12px; border:1px solid #e3dac9; border-radius:16px; background:rgba(255,255,255,.94); box-shadow:0 10px 26px rgba(60,50,30,.09); backdrop-filter:blur(10px); }
+  .website-toolbar strong { margin-right:auto; color:#1f6b40; }
+  .website-toolbar .jump { border:0; border-radius:999px; padding:7px 12px; background:#f4efe5; color:#5c5648; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+  .language-toggle { border:1.5px solid #2f8f57; border-radius:999px; padding:8px 14px; background:#fff; color:#1f6b40; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .site-canvas { overflow:hidden; border:1px solid #e2d8c5; border-radius:24px; background:#fdfbf6; box-shadow:0 20px 54px rgba(60,50,30,.09); }
+  .site-editor-section { padding:clamp(24px,4vw,44px); border-bottom:1px solid #e7dece; scroll-margin-top:92px; }
+  .site-editor-section:last-child { border-bottom:0; }
+  .site-editor-section:nth-child(odd) { background:#fdfbf6; }
+  .site-editor-section:nth-child(even) { background:#f6f0e4; }
+  .section-toolbar { display:flex; align-items:center; gap:16px; margin-bottom:24px; padding-bottom:12px; border-bottom:1px solid rgba(216,205,184,.72); }
+  .section-toolbar h3 { margin:0 auto 0 0; font-family:'Newsreader','Noto Serif TC',serif; font-size:20px; color:#2f2b22; }
+  .section-toolbar .visibility-control { margin:0; padding:8px 11px; background:#fff; font-size:12px; }
+  .visual-input { width:100%; min-width:0; border:1.5px dashed #cdbfa7; border-radius:10px; padding:8px 10px; background:rgba(255,255,255,.82); color:#2f2b22; font:inherit; transition:border-color .15s,box-shadow .15s,background .15s; }
+  .visual-input:hover { border-color:#8ab79d; background:#fff; }
+  .visual-input:focus { outline:0; border-style:solid; border-color:#2f8f57; box-shadow:0 0 0 3px rgba(47,143,87,.14); background:#fff; }
+  textarea.visual-input { min-height:72px; }
+  .visual-eyebrow { color:#2f8f57; font-size:12px; font-weight:700; letter-spacing:.12em; }
+  .visual-title { font-family:'Newsreader','Noto Serif TC',serif; font-size:clamp(25px,4vw,42px); font-weight:600; line-height:1.15; }
+  .visual-subtitle { font-size:16px; line-height:1.75; color:#5c5648; }
+  .visual-card-title { font-family:'Newsreader','Noto Serif TC',serif; font-size:18px; font-weight:600; }
+  .visual-card-text { color:#6b6558; font-size:14px; line-height:1.65; }
+  .visual-hero { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(280px,.8fr); gap:30px; align-items:center; }
+  .visual-stack { display:flex; flex-direction:column; gap:12px; }
+  .visual-actions,.visual-badges { display:flex; flex-wrap:wrap; gap:10px; }
+  .visual-button { width:auto; max-width:220px; border-radius:999px; font-weight:700; text-align:center; }
+  .visual-button.primary { background:#ec6a45; color:#fff; border-color:#ec6a45; }
+  .visual-button.secondary { color:#1f6b40; }
+  .visual-badge { width:auto; max-width:200px; border-radius:999px; font-size:13px; font-weight:600; }
+  .visual-photo-panel { min-height:270px; border:1px dashed #cfc2a9; border-radius:20px; padding:16px; background:linear-gradient(158deg,#e7f4ec,#dcecf7 52%,#fdf1de); }
+  .visual-photo-panel > strong { display:block; color:#1f6b40; font-size:13px; }
+  .visual-grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:22px; }
+  .visual-grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:22px; }
+  .visual-content-card { display:flex; flex-direction:column; gap:9px; padding:20px; border:1px solid #e8dfce; border-radius:18px; background:#fff; box-shadow:0 8px 22px rgba(60,50,30,.04); }
+  .visual-room-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:18px; margin-top:22px; }
+  .visual-room-card { min-width:0; padding:18px; border:1px solid #e7ddca; border-radius:20px; background:#fff; box-shadow:0 9px 24px rgba(60,50,30,.05); }
+  .visual-room-card .btn-danger { margin-top:14px; }
+  .visual-stat-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0; }
+  .visual-stat { display:flex; flex-direction:column; gap:7px; padding:16px; border:1px solid #e8dfce; border-radius:16px; background:#fff; }
+  .visual-cta { display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center; margin-top:18px; padding:18px; border:1px solid #e6d7bd; border-radius:18px; background:#fffaf0; }
+  .visual-list { display:flex; flex-direction:column; gap:9px; margin-top:12px; }
+  .visual-list-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:start; }
+  .visual-list-number { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:10px; background:#f8f0dd; color:#d98a1f; font-size:12px; font-weight:700; }
+  .visual-list-actions { display:flex; flex-wrap:wrap; gap:5px; }
+  .visual-list-actions button { border:0; border-radius:9px; padding:6px 8px; background:#f2ece0; color:#5c5648; cursor:pointer; }
+  .visual-list-actions .remove-list-item { background:#fdece7; color:#b3401f; }
+  .settings-card { max-width:620px; }
+  .save-state { margin-right:auto; color:#8a836f; font-size:13px; font-weight:700; }
+  .save-state.dirty { color:#b35a23; }
+  @media (max-width:820px) {
+    .admin-shell { grid-template-columns:1fr; }
+    .admin-nav { position:static; display:flex; gap:7px; overflow-x:auto; padding:8px; }
+    .admin-nav-title { display:none; }
+    .admin-nav button { width:auto; min-width:max-content; text-align:center; padding:10px 15px; }
+    .admin-nav button[aria-current="page"] { box-shadow:inset 0 -3px #2f8f57; }
+    .visual-hero,.visual-cta { grid-template-columns:1fr; }
+    .visual-grid-3,.visual-grid-2,.visual-stat-grid { grid-template-columns:1fr; }
+    .website-toolbar { position:static; }
+    .visual-button,.visual-badge { max-width:none; }
+  }
 </style>
 </head>
 <body>
@@ -61,13 +134,14 @@
 <div id="app" style="display:none">
   <div class="wrap">
     <h1>網站後台</h1>
-    <div class="sub">改完記得按最下面的「儲存」。公開網站會在訪客下次開啟時更新。</div>
+    <div class="sub">看到哪一段就直接改哪一段；完成後按最下面的「儲存修改」。</div>
     <div id="sections"></div>
     <div id="saveMsg" class="msg"></div>
   </div>
   <div class="bar">
+    <span id="saveState" class="save-state">目前沒有尚未儲存的修改</span>
     <button class="btn btn-ghost" id="reloadBtn">重新載入</button>
-    <button class="btn btn-primary" id="saveBtn">儲存</button>
+    <button class="btn btn-primary" id="saveBtn">儲存修改</button>
   </div>
 </div>
 
@@ -117,6 +191,7 @@
   function loadAndRender() {
     return runAuth('loadAdminContent').then(function (content) {
       CONTENT = content;
+      HAS_UNSAVED_CHANGES = false;
       renderSections();
     });
   }
@@ -143,101 +218,103 @@
   }
 
   var SECTIONS = [
-    { title: '基本資訊', keys: [
-      { key: 'site_name', label: '站名', translatable: false },
-      { key: 'contact_email', label: '聯絡 Email（顯示在網站上）', translatable: false },
-      { key: 'contact_line', label: '電話 / LINE', translatable: false },
-      { key: 'notify_email', label: '收表單通知信的信箱', translatable: false },
-      { key: 'location_text', label: '地點' }
+    { editorId: 'home', title: '首頁', visibilityKey: 'show_home', photos: 'hero', keys: [
+      { key: 'site_name', label: '網站名稱', translatable: false },
+      { key: 'hero_eyebrow', label: '首頁位置說明' },
+      { key: 'tagline', label: '首頁介紹', multiline: true },
+      { key: 'hero_cta_primary', label: '橘色申請按鈕' },
+      { key: 'hero_cta_secondary', label: '白色住宿按鈕' },
+      { key: 'hero_badge_location', label: '地點特色文字' },
+      { key: 'hero_badge_host', label: '經營者特色文字' },
+      { key: 'hero_badge_work', label: '換宿特色文字' }
     ] },
-    { title: '首頁主視覺', visibilityKey: 'show_home', photos: 'hero', keys: [
-      { key: 'hero_eyebrow', label: '上方小標' },
-      { key: 'tagline', label: '首頁標語', multiline: true },
-      { key: 'hero_cta_primary', label: '主要按鈕文字' },
-      { key: 'hero_cta_secondary', label: '次要按鈕文字' },
-      { key: 'hero_badge_location', label: '特色標籤：地點' },
-      { key: 'hero_badge_host', label: '特色標籤：經營者' },
-      { key: 'hero_badge_work', label: '特色標籤：換宿' },
-      { key: 'hero_badge_sky', label: '照片角標' },
-      { key: 'hero_photo_title', label: '尚未上傳照片時的標題' },
-      { key: 'hero_photo_hint', label: '尚未上傳照片時的提示', multiline: true }
+    { editorId: 'about', title: '關於我們', visibilityKey: 'show_about', keys: [
+      { key: 'about_eyebrow', label: '關於我們' },
+      { key: 'about_title', label: '關於我們標題' },
+      { key: 'intro_text', label: '農莊介紹', multiline: true },
+      { key: 'feature_1_title', label: '住宿特色標題' },
+      { key: 'feature_1', label: '住宿特色內容', multiline: true },
+      { key: 'feature_2_title', label: '換宿特色標題' },
+      { key: 'feature_2', label: '換宿特色內容', multiline: true },
+      { key: 'feature_3_title', label: '生活特色標題' },
+      { key: 'feature_3', label: '生活特色內容', multiline: true }
     ] },
-    { title: '關於我們', visibilityKey: 'show_about', keys: [
-      { key: 'about_eyebrow', label: '區塊小標' },
-      { key: 'about_title', label: '區塊標題' },
-      { key: 'intro_text', label: '介紹段落', multiline: true },
-      { key: 'feature_1_title', label: '特色一標題' },
-      { key: 'feature_1', label: '特色一內容', multiline: true },
-      { key: 'feature_2_title', label: '特色二標題' },
-      { key: 'feature_2', label: '特色二內容', multiline: true },
-      { key: 'feature_3_title', label: '特色三標題' },
-      { key: 'feature_3', label: '特色三內容', multiline: true }
+    { editorId: 'stay', title: '住宿資訊', visibilityKey: 'show_stay', keys: [
+      { key: 'stay_eyebrow', label: '住宿資訊' },
+      { key: 'stay_title', label: '住宿標題' },
+      { key: 'accommodation_intro', label: '住宿介紹', multiline: true },
+      { key: 'booking_note', label: '房價提醒', multiline: true }
     ] },
-    { title: '住宿區', visibilityKey: 'show_stay', keys: [
-      { key: 'stay_eyebrow', label: '區塊小標' },
-      { key: 'stay_title', label: '區塊標題' },
-      { key: 'accommodation_intro', label: '住宿區介紹', multiline: true },
-      { key: 'booking_note', label: '預定注意事項', multiline: true }
-    ] },
-    { title: '打工換宿區', visibilityKey: 'show_work', keys: [
-      { key: 'work_eyebrow', label: '區塊小標' },
-      { key: 'work_title', label: '區塊標題' },
-      { key: 'workexchange_intro', label: '換宿區介紹', multiline: true },
-      { key: 'work_stat_duration_value', label: '摘要一數值' },
-      { key: 'work_stat_duration_label', label: '摘要一說明' },
-      { key: 'work_stat_hours_value', label: '摘要二數值' },
-      { key: 'work_stat_hours_label', label: '摘要二說明' },
-      { key: 'work_stat_schedule_value', label: '摘要三數值' },
-      { key: 'work_stat_schedule_label', label: '摘要三說明' },
-      { key: 'work_rules_title', label: '章則標題' },
-      { key: 'work_duties_title', label: '工作內容標題' },
-      { key: 'work_duties_intro', label: '工作內容說明', multiline: true },
-      { key: 'work_duties_outdoor_title', label: '戶外工作標題' },
-      { key: 'work_duties_indoor_title', label: '室內工作標題' },
-      { key: 'work_cta_title', label: '換宿申請提示標題' },
-      { key: 'work_cta_text', label: '換宿申請提示內容' },
+    { editorId: 'work', title: '打工換宿', visibilityKey: 'show_work', keys: [
+      { key: 'work_eyebrow', label: '打工換宿' },
+      { key: 'work_title', label: '換宿標題' },
+      { key: 'workexchange_intro', label: '換宿介紹', multiline: true },
+      { key: 'work_stat_duration_value', label: '換宿期間' },
+      { key: 'work_stat_duration_label', label: '換宿期間補充' },
+      { key: 'work_stat_hours_value', label: '每日時數' },
+      { key: 'work_stat_hours_label', label: '每日時段' },
+      { key: 'work_stat_schedule_value', label: '休假方式' },
+      { key: 'work_stat_schedule_label', label: '休假補充' },
+      { key: 'work_rules_title', label: '換宿章則名稱' },
+      { key: 'work_duties_title', label: '工作內容名稱' },
+      { key: 'work_duties_intro', label: '工作內容介紹', multiline: true },
+      { key: 'work_duties_outdoor_title', label: '戶外工作名稱' },
+      { key: 'work_duties_indoor_title', label: '室內工作名稱' },
+      { key: 'work_cta_title', label: '換宿申請提醒' },
+      { key: 'work_cta_text', label: '換宿申請說明' },
       { key: 'work_cta_button', label: '換宿申請按鈕' },
-      { key: 'work_rooms_eyebrow', label: '換宿房間小標' },
+      { key: 'work_rooms_eyebrow', label: '換宿住宿空間' },
       { key: 'work_rooms_title', label: '換宿房間標題' },
-      { key: 'workexchange_rooms_intro', label: '換宿房間區介紹', multiline: true },
-      { key: 'work_rooms_empty', label: '尚無換宿房間時的提示', multiline: true }
+      { key: 'workexchange_rooms_intro', label: '換宿房間介紹', multiline: true },
+      { key: 'work_rooms_empty', label: '沒有換宿房間時的說明', multiline: true }
     ] },
-    { title: '周邊與生活', visibilityKey: 'show_nearby', keys: [
-      { key: 'nearby_eyebrow', label: '區塊小標' },
-      { key: 'nearby_title', label: '區塊標題' },
-      { key: 'nearby_intro', label: '區塊介紹', multiline: true },
-      { key: 'nearby_transport_title', label: '交通卡片標題' },
-      { key: 'nearby_transport_text', label: '交通卡片內容', multiline: true },
-      { key: 'nearby_essentials_title', label: '生活卡片標題' },
-      { key: 'nearby_essentials_text', label: '生活卡片內容', multiline: true },
-      { key: 'nearby_explore_title', label: '探索卡片標題' },
-      { key: 'nearby_explore_text', label: '探索卡片內容', multiline: true },
-      { key: 'nearby_farm_title', label: '農莊卡片標題' },
-      { key: 'nearby_farm_text', label: '農莊卡片內容', multiline: true },
-      { key: 'scenery_heading', label: '照片區標題' },
-      { key: 'scenery1_label', label: '風景照片一名稱' },
-      { key: 'scenery2_label', label: '風景照片二名稱' },
-      { key: 'scenery3_label', label: '風景照片三名稱' }
+    { editorId: 'nearby', title: '周邊與生活', visibilityKey: 'show_nearby', keys: [
+      { key: 'nearby_eyebrow', label: '周邊與生活' },
+      { key: 'nearby_title', label: '周邊標題' },
+      { key: 'nearby_intro', label: '周邊介紹', multiline: true },
+      { key: 'nearby_transport_title', label: '交通接送名稱' },
+      { key: 'nearby_transport_text', label: '交通接送內容', multiline: true },
+      { key: 'nearby_essentials_title', label: '生活機能名稱' },
+      { key: 'nearby_essentials_text', label: '生活機能內容', multiline: true },
+      { key: 'nearby_explore_title', label: '探索基督城名稱' },
+      { key: 'nearby_explore_text', label: '探索基督城內容', multiline: true },
+      { key: 'nearby_farm_title', label: '農莊時光名稱' },
+      { key: 'nearby_farm_text', label: '農莊時光內容', multiline: true }
     ] },
-    { title: '線上申請區', visibilityKey: 'show_apply', keys: [
-      { key: 'apply_eyebrow', label: '區塊小標' },
-      { key: 'apply_title', label: '區塊標題' },
-      { key: 'apply_intro', label: '區塊介紹', multiline: true },
-      { key: 'stay_form_note', label: '住宿表單說明', multiline: true },
-      { key: 'work_form_note', label: '換宿表單說明', multiline: true },
-      { key: 'services_form_note', label: '其他服務表單說明', multiline: true }
+    { editorId: 'apply', title: '線上申請', visibilityKey: 'show_apply', keys: [
+      { key: 'apply_eyebrow', label: '線上申請' },
+      { key: 'apply_title', label: '申請標題' },
+      { key: 'apply_intro', label: '申請介紹', multiline: true },
+      { key: 'stay_form_note', label: '住宿申請說明', multiline: true },
+      { key: 'work_form_note', label: '換宿申請說明', multiline: true },
+      { key: 'services_form_note', label: '其他服務說明', multiline: true }
     ] },
-    { title: '聯絡區', visibilityKey: 'show_contact', keys: [
-      { key: 'contact_eyebrow', label: '區塊小標' },
-      { key: 'contact_title', label: '區塊標題' },
-      { key: 'contact_location_title', label: '地點卡片標題' },
-      { key: 'contact_email_title', label: 'Email 卡片標題' },
-      { key: 'contact_phone_title', label: '電話卡片標題' }
-    ] },
-    { title: '頁尾', keys: [
+    { editorId: 'contact', title: '聯絡我們', visibilityKey: 'show_contact', keys: [
+      { key: 'contact_eyebrow', label: '聯絡我們' },
+      { key: 'contact_title', label: '聯絡標題' },
+      { key: 'contact_location_title', label: '地點名稱' },
+      { key: 'location_text', label: '地點內容' },
+      { key: 'contact_email_title', label: 'Email 名稱' },
+      { key: 'contact_email', label: '公開 Email', translatable: false },
+      { key: 'contact_phone_title', label: '電話與 LINE 名稱' },
+      { key: 'contact_line', label: '電話與 LINE', translatable: false },
       { key: 'footer_note', label: '頁尾說明' }
+    ] },
+    { editorId: 'notifications', title: '通知設定', keys: [
+      { key: 'notify_email', label: '收到新申請時，寄通知到這個 Email', translatable: false }
     ] }
   ];
+
+  var ADMIN_PAGES = [
+    { id: 'schedule', label: '申請管理', description: '查看所有申請、日期、人數與處理狀態。' },
+    { id: 'website', label: '編輯網站', description: '公開網站上的文字、房間與照片都依照實際順序放在這裡。' },
+    { id: 'notifications', label: '通知設定', description: '設定收到新申請時要寄到哪個信箱。' }
+  ];
+  var ACTIVE_ADMIN_PAGE = 'schedule';
+  var EDITOR_LANGUAGE = 'zh';
+  var HAS_UNSAVED_CHANGES = false;
+  var CHANGE_VERSION = 0;
+  var EDITOR_WRITE_ACTIVE = false;
 
   var ROOM_FIELDS = [
     { column: 'name', label: '房型名稱' },
@@ -265,29 +342,76 @@
     return node;
   }
 
-  /** One label plus a Chinese box and, unless untranslatable, an English box. */
-  function renderTextField(key, label, options) {
-    var settings = CONTENT.settings || {};
-    var wrap = el('div', {});
-
-    if (options.translatable === false) {
-      wrap.appendChild(el('label', { text: label, for: 'f_' + key }));
-      wrap.appendChild(inputFor(settings[key], options.multiline, 'f_' + key));
-      return wrap;
+  function fieldMeta(key) {
+    for (var i = 0; i < SECTIONS.length; i++) {
+      for (var j = 0; j < SECTIONS[i].keys.length; j++) {
+        if (SECTIONS[i].keys[j].key === key) return SECTIONS[i].keys[j];
+      }
     }
+    throw new Error('找不到網站欄位：' + key);
+  }
 
-    var row = el('div', { class: 'row' });
-    var zh = el('div', {});
-    zh.appendChild(el('label', { text: label + '（中文）', for: 'f_' + key }));
-    zh.appendChild(inputFor(settings[key], options.multiline, 'f_' + key));
+  function settingKey(field, language) {
+    return field.translatable === false || language === 'zh' ? field.key : field.key + '_en';
+  }
 
-    var en = el('div', {});
-    en.appendChild(el('label', { text: label + '（English，可留空）', for: 'f_' + key + '_en' }));
-    en.appendChild(inputFor(settings[key + '_en'], options.multiline, 'f_' + key + '_en'));
+  function fieldId(field, language) {
+    return 'f_' + settingKey(field, language);
+  }
 
-    row.appendChild(zh);
-    row.appendChild(en);
-    wrap.appendChild(row);
+  function updateSaveState() {
+    var state = document.getElementById('saveState');
+    if (!state) return;
+    state.textContent = HAS_UNSAVED_CHANGES ? '有尚未儲存的修改' : '目前沒有尚未儲存的修改';
+    state.className = 'save-state' + (HAS_UNSAVED_CHANGES ? ' dirty' : '');
+  }
+
+  function setEditorBusy(busy) {
+    var app = document.getElementById('app');
+    if (app) {
+      app.inert = busy;
+      app.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
+    var saveButton = document.getElementById('saveBtn');
+    if (saveButton) saveButton.disabled = busy;
+  }
+
+  function beginEditorWrite() {
+    if (EDITOR_WRITE_ACTIVE) return false;
+    EDITOR_WRITE_ACTIVE = true;
+    setEditorBusy(true);
+    return true;
+  }
+
+  function endEditorWrite() {
+    EDITOR_WRITE_ACTIVE = false;
+    setEditorBusy(false);
+  }
+
+  function markDirty() {
+    CHANGE_VERSION++;
+    HAS_UNSAVED_CHANGES = true;
+    updateSaveState();
+  }
+
+  function renderVisualField(key, className) {
+    var field = fieldMeta(key);
+    var settings = CONTENT.settings || {};
+    var keyForLanguage = settingKey(field, EDITOR_LANGUAGE);
+    var input = inputFor(settings[keyForLanguage], field.multiline, fieldId(field, EDITOR_LANGUAGE));
+    input.className = 'visual-input' + (className ? ' ' + className : '');
+    input.setAttribute('data-edit-key', key);
+    input.setAttribute('aria-label', field.label);
+    input.setAttribute('placeholder', field.label);
+    input.oninput = markDirty;
+    return input;
+  }
+
+  function renderTextField(key, label, options) {
+    var wrap = el('div', {});
+    var field = fieldMeta(key);
+    wrap.appendChild(el('label', { text: label, for: fieldId(field, EDITOR_LANGUAGE) }));
+    wrap.appendChild(renderVisualField(key, ''));
     return wrap;
   }
 
@@ -301,38 +425,38 @@
     var label = el('label', { class: 'visibility-control', for: 'f_' + key });
     label.appendChild(input);
     label.appendChild(el('span', { text: '在公開網站顯示這個區塊' }));
+    input.onchange = markDirty;
     return label;
   }
 
   function renderRoomCard(room, index) {
-    var card = el('div', { class: 'card', id: 'room_' + index });
-    card.appendChild(el('h2', { text: '房型 ' + (index + 1) }));
+    var card = el('article', { class: 'visual-room-card', id: 'room_' + index });
+    card.appendChild(el('div', { class: 'editor-kind', text: '住宿房型 ' + (index + 1) }));
+    card.appendChild(renderPhotoManager('room-' + index, room.photos));
 
     ROOM_FIELDS.forEach(function (field) {
-      var row = el('div', { class: 'row' });
-
-      var zh = el('div', {});
-      zh.appendChild(el('label', { text: field.label + '（中文）' }));
-      zh.appendChild(inputFor(room[field.column], field.multiline, 'r' + index + '_' + field.column));
-
-      var en = el('div', {});
-      en.appendChild(el('label', { text: field.label + '（English，可留空）' }));
-      en.appendChild(inputFor(room[field.column + '_en'], field.multiline, 'r' + index + '_' + field.column + '_en'));
-
-      row.appendChild(zh);
-      row.appendChild(en);
-      card.appendChild(row);
+      var column = field.column + (EDITOR_LANGUAGE === 'en' ? '_en' : '');
+      var input = inputFor(room[column], field.multiline, 'r' + index + '_' + column);
+      input.className = 'visual-input ' + (field.column === 'name' ? 'visual-card-title' : 'visual-card-text');
+      input.setAttribute('placeholder', field.label);
+      input.setAttribute('aria-label', field.label);
+      input.oninput = markDirty;
+      card.appendChild(input);
     });
 
-    card.appendChild(el('label', { text: '價格（數字；留空顯示破折號）' }));
-    card.appendChild(inputFor(room.price, false, 'r' + index + '_price'));
-
-    card.appendChild(renderPhotoManager('room-' + index, room.photos));
+    var price = inputFor(room.price, false, 'r' + index + '_price');
+    price.className = 'visual-input';
+    price.setAttribute('placeholder', '參考價格');
+    price.setAttribute('aria-label', '參考價格');
+    price.oninput = markDirty;
+    card.appendChild(price);
 
     var remove = el('button', { class: 'btn btn-danger', type: 'button', text: '刪除這個房型' });
     remove.style.marginTop = '16px';
     remove.onclick = function () {
-      CONTENT.rooms = collectRooms().filter(function (_, i) { return i !== index; });
+      preserveDraftContent();
+      CONTENT.rooms = CONTENT.rooms.filter(function (_, i) { return i !== index; });
+      markDirty();
       renderSections();
     };
     card.appendChild(remove);
@@ -341,38 +465,38 @@
 
   function collectRooms() {
     return (CONTENT.rooms || []).map(function (room, index) {
-      var updated = { photos: room.photos || '' };
+      var updated = Object.assign({}, room, { photos: room.photos || '' });
       ROOM_FIELDS.forEach(function (field) {
-        updated[field.column] = document.getElementById('r' + index + '_' + field.column).value;
-        updated[field.column + '_en'] = document.getElementById('r' + index + '_' + field.column + '_en').value;
+        var column = field.column + (EDITOR_LANGUAGE === 'en' ? '_en' : '');
+        var input = document.getElementById('r' + index + '_' + column);
+        if (input) updated[column] = input.value;
       });
-      updated.price = document.getElementById('r' + index + '_price').value;
+      var price = document.getElementById('r' + index + '_price');
+      if (price) updated.price = price.value;
       return updated;
     });
   }
 
   function renderWorkRoomCard(room, index) {
-    var card = el('div', { class: 'card', id: 'work_room_' + index });
-    card.appendChild(el('h2', { text: '換宿房間 ' + (index + 1) }));
+    var card = el('article', { class: 'visual-room-card', id: 'work_room_' + index });
+    card.appendChild(el('div', { class: 'editor-kind', text: '換宿房間 ' + (index + 1) }));
+    card.appendChild(renderPhotoManager('work-room-' + index, room.photos));
 
     [{ column: 'name', label: '房間名稱' }, { column: 'description', label: '房間簡介', multiline: true }].forEach(function (field) {
-      var row = el('div', { class: 'row' });
-      var zh = el('div', {});
-      zh.appendChild(el('label', { text: field.label + '（中文）' }));
-      zh.appendChild(inputFor(room[field.column], field.multiline, 'wr' + index + '_' + field.column));
-      var en = el('div', {});
-      en.appendChild(el('label', { text: field.label + '（English，可留空）' }));
-      en.appendChild(inputFor(room[field.column + '_en'], field.multiline, 'wr' + index + '_' + field.column + '_en'));
-      row.appendChild(zh);
-      row.appendChild(en);
-      card.appendChild(row);
+      var column = field.column + (EDITOR_LANGUAGE === 'en' ? '_en' : '');
+      var input = inputFor(room[column], field.multiline, 'wr' + index + '_' + column);
+      input.className = 'visual-input ' + (field.column === 'name' ? 'visual-card-title' : 'visual-card-text');
+      input.setAttribute('placeholder', field.label);
+      input.setAttribute('aria-label', field.label);
+      input.oninput = markDirty;
+      card.appendChild(input);
     });
-
-    card.appendChild(renderPhotoManager('work-room-' + index, room.photos));
     var remove = el('button', { class: 'btn btn-danger', type: 'button', text: '刪除這個換宿房間' });
     remove.style.marginTop = '16px';
     remove.onclick = function () {
-      CONTENT.work_rooms = collectWorkRooms().filter(function (_, i) { return i !== index; });
+      preserveDraftContent();
+      CONTENT.work_rooms = CONTENT.work_rooms.filter(function (_, i) { return i !== index; });
+      markDirty();
       renderSections();
     };
     card.appendChild(remove);
@@ -381,51 +505,101 @@
 
   function collectWorkRooms() {
     return (CONTENT.work_rooms || []).map(function (room, index) {
-      return {
-        name: document.getElementById('wr' + index + '_name').value,
-        name_en: document.getElementById('wr' + index + '_name_en').value,
-        description: document.getElementById('wr' + index + '_description').value,
-        description_en: document.getElementById('wr' + index + '_description_en').value,
-        photos: room.photos || ''
-      };
+      var updated = Object.assign({}, room, { photos: room.photos || '' });
+      ['name', 'description'].forEach(function (base) {
+        var column = base + (EDITOR_LANGUAGE === 'en' ? '_en' : '');
+        var input = document.getElementById('wr' + index + '_' + column);
+        if (input) updated[column] = input.value;
+      });
+      return updated;
     });
   }
 
-  function collectPayload() {
+  function collectSettings() {
+    var settings = Object.assign({}, CONTENT.settings || {});
+    SECTIONS.forEach(function (section) {
+      if (section.visibilityKey) {
+        var visibility = document.getElementById('f_' + section.visibilityKey);
+        if (visibility) settings[section.visibilityKey] = visibility.checked ? 'true' : 'false';
+      }
+      section.keys.forEach(function (field) {
+        var input = document.getElementById(fieldId(field, EDITOR_LANGUAGE));
+        if (input) settings[settingKey(field, EDITOR_LANGUAGE)] = input.value;
+      });
+    });
+    return settings;
+  }
+
+  function collectSaveSettings() {
     var settings = {};
     SECTIONS.forEach(function (section) {
       if (section.visibilityKey) {
-        settings[section.visibilityKey] = document.getElementById('f_' + section.visibilityKey).checked ? 'true' : 'false';
+        var visibility = document.getElementById('f_' + section.visibilityKey);
+        if (visibility) settings[section.visibilityKey] = visibility.checked ? 'true' : 'false';
       }
       section.keys.forEach(function (field) {
-        settings[field.key] = document.getElementById('f_' + field.key).value;
-        if (field.translatable !== false) {
-          settings[field.key + '_en'] = document.getElementById('f_' + field.key + '_en').value;
-        }
+        var input = document.getElementById(fieldId(field, EDITOR_LANGUAGE));
+        if (input) settings[settingKey(field, EDITOR_LANGUAGE)] = input.value;
       });
     });
-    return { settings: settings, rooms: collectRooms(), work_rooms: collectWorkRooms() };
+    return settings;
+  }
+
+  function collectPayload() {
+    return { settings: collectSaveSettings(), rooms: collectRooms(), work_rooms: collectWorkRooms() };
+  }
+
+  function preserveDraftContent() {
+    CONTENT.settings = collectSettings();
+    CONTENT.rooms = collectRooms();
+    CONTENT.work_rooms = collectWorkRooms();
+    (LIST_META || []).forEach(function (meta) {
+      CONTENT[meta.name] = collectListItems(meta.name);
+    });
   }
 
   function saveAll() {
-    var button = document.getElementById('saveBtn');
     var message = document.getElementById('saveMsg');
-    button.disabled = true;
+    if (!beginEditorWrite()) {
+      setMsg(message, 'err', '照片或內容正在儲存，請稍候。');
+      return Promise.resolve(false);
+    }
+    var versionAtStart = CHANGE_VERSION;
     setMsg(message, '', '');
 
-    return runAuth('saveContent', collectPayload()).then(function () {
-      setMsg(message, 'ok', '已儲存。公開網站會在訪客下次開啟時更新。');
-      button.disabled = false;
+    preserveDraftContent();
+      var request = runAuth('saveContent', collectPayload());
+      LIST_META.forEach(function (meta) {
+        request = request.then(function () {
+          return runAuth('saveList', meta.name, collectSaveListItems(meta.name));
+        });
+      });
+    return request.then(function () {
+      if (CHANGE_VERSION === versionAtStart) HAS_UNSAVED_CHANGES = false;
+      updateSaveState();
+      setMsg(message, 'ok', HAS_UNSAVED_CHANGES ? '已儲存先前內容；另有新的修改尚未儲存。' : '已儲存。公開網站會在訪客下次開啟時更新。');
+      endEditorWrite();
+      return true;
     }).catch(function (error) {
       setMsg(message, 'err', '儲存失敗：' + error);
-      button.disabled = false;
+      endEditorWrite();
+      return false;
     });
+  }
+
+  function replaceScheduleCard() {
+    var current = document.getElementById('schedule-card');
+    if (!current) return;
+    var holder = document.createElement('div');
+    renderSchedule(holder);
+    current.parentNode.replaceChild(holder.firstChild, current);
   }
 
   function renderSchedule(host) {
     var card = el('div', { class: 'card' });
+    card.id = 'schedule-card';
     card.appendChild(el('h2', { text: '申請排程' }));
-    card.appendChild(el('div', { class: 'sub', text: '依服務日期排列；同一天較早送出的人排在前面。狀態可直接在右側更新。' }));
+    card.appendChild(el('div', { class: 'sub', text: '依服務日期排列；同一天較早送出的人排在前面。Google Sheet 的「管理總覽」會同步統計，狀態可直接在右側更新。' }));
     var rows = CONTENT.schedule || [];
     if (!rows.length) {
       card.appendChild(el('div', { text: '目前沒有申請。' }));
@@ -437,7 +611,7 @@
     var table = el('table', { class: 'schedule-table' });
     var head = el('thead', {});
     var headRow = el('tr', {});
-    ['服務日期', '類型', '項目', '詳細資料', '申請人', '聯絡方式', '車牌', '申請時間', '狀態'].forEach(function (label) {
+    ['服務日期', '類型', '項目', '人數', '數量', '詳細資料', '排程提醒', '申請人', '聯絡方式', '車牌', '申請時間', '狀態'].forEach(function (label) {
       headRow.appendChild(el('th', { text: label }));
     });
     head.appendChild(headRow);
@@ -451,12 +625,15 @@
       typeCell.appendChild(el('span', { class: 'schedule-type', text: row.type || '' }));
       tr.appendChild(typeCell);
       tr.appendChild(el('td', { text: row.items || '' }));
+      tr.appendChild(el('td', { text: row.people_count || '—' }));
+      tr.appendChild(el('td', { text: row.quantity || '—' }));
       var detailCell = el('td', { text: row.details || '—' });
       if (row.photo_url) {
         detailCell.appendChild(document.createElement('br'));
         detailCell.appendChild(el('a', { href: row.photo_url, target: '_blank', rel: 'noopener noreferrer', text: '查看本人照片' }));
       }
       tr.appendChild(detailCell);
+      tr.appendChild(el('td', { class: row.conflict ? 'schedule-warning' : '', text: row.conflict || '—' }));
       tr.appendChild(el('td', { text: row.applicant || '' }));
       tr.appendChild(el('td', { text: [row.phone, row.email].filter(Boolean).join('\n') }));
       tr.lastChild.style.whiteSpace = 'pre-line';
@@ -465,7 +642,7 @@
 
       var statusCell = el('td', {});
       var select = el('select', {});
-      ['新申請', '已聯絡', '已確認', '已取消'].forEach(function (status) {
+      ['新申請', '已聯絡', '已確認', '已完成', '已取消'].forEach(function (status) {
         var option = el('option', { value: status, text: status });
         option.selected = row.status === status;
         select.appendChild(option);
@@ -473,9 +650,13 @@
       select.onchange = function () {
         var nextStatus = select.value;
         select.disabled = true;
-        runAuth('updateScheduleStatus', row.id, nextStatus).then(function () {
+        runAuth('updateScheduleStatus', row.id, nextStatus).then(function (result) {
           row.status = nextStatus;
           select.disabled = false;
+          if (result && result.schedule) {
+            CONTENT.schedule = result.schedule;
+            replaceScheduleCard();
+          }
         }).catch(function (error) {
           select.value = row.status;
           select.disabled = false;
@@ -492,56 +673,278 @@
     host.appendChild(card);
   }
 
-  function renderSections() {
-    var host = document.getElementById('sections');
-    host.innerHTML = '';
+  function sectionByEditorId(editorId) {
+    return SECTIONS.filter(function (section) { return section.editorId === editorId; })[0];
+  }
 
-    renderSchedule(host);
+  function renderSectionToolbar(section) {
+    var toolbar = el('div', { class: 'section-toolbar' });
+    toolbar.appendChild(el('h3', { text: section.title }));
+    if (section.visibilityKey) toolbar.appendChild(renderVisibilityField(section.visibilityKey));
+    return toolbar;
+  }
 
-    SECTIONS.forEach(function (section) {
-      var card = el('details', { class: 'card' });
-      card.open = section.title === '基本資訊';
-      card.appendChild(el('summary', { text: section.title }));
-      if (section.visibilityKey) card.appendChild(renderVisibilityField(section.visibilityKey));
-      section.keys.forEach(function (field) {
-        card.appendChild(renderTextField(field.key, field.label, field));
-      });
-      if (section.photos) card.appendChild(renderPhotoManager(section.photos, (CONTENT.settings || {})[section.photos + '_photos']));
-      if (section.title === '周邊與生活') {
-        ['1', '2', '3'].forEach(function (n) {
-          card.appendChild(el('label', { text: '景點 ' + n + ' 照片' }));
-          card.appendChild(renderPhotoManager('scenery-' + n, (CONTENT.settings || {})['scenery' + n + '_photos']));
-        });
-      }
-      host.appendChild(card);
-    });
+  function renderSectionIntro(section, eyebrowKey, titleKey, introKey) {
+    var block = el('div', { class: 'visual-stack' });
+    block.appendChild(renderVisualField(eyebrowKey, 'visual-eyebrow'));
+    block.appendChild(renderVisualField(titleKey, 'visual-title'));
+    if (introKey) block.appendChild(renderVisualField(introKey, 'visual-subtitle'));
+    return block;
+  }
 
-    var roomsCard = el('div', { class: 'card' });
-    roomsCard.appendChild(el('h2', { text: '房型' }));
-    host.appendChild(roomsCard);
+  function renderVisualCard(titleKey, textKey) {
+    var card = el('article', { class: 'visual-content-card' });
+    card.appendChild(renderVisualField(titleKey, 'visual-card-title'));
+    card.appendChild(renderVisualField(textKey, 'visual-card-text'));
+    return card;
+  }
 
-    (CONTENT.rooms || []).forEach(function (room, index) { host.appendChild(renderRoomCard(room, index)); });
-
-    var add = el('button', { class: 'btn btn-ghost', type: 'button', text: '＋ 新增房型' });
+  function renderRoomEditors(host) {
+    var grid = el('div', { class: 'visual-room-grid' });
+    (CONTENT.rooms || []).forEach(function (room, index) { grid.appendChild(renderRoomCard(room, index)); });
+    host.appendChild(grid);
+    var add = el('button', { class: 'btn btn-ghost', type: 'button', text: '＋ 新增住宿房型' });
+    add.style.marginTop = '16px';
     add.onclick = function () {
-      CONTENT.rooms = collectRooms().concat([{ name: '', description: '', price: '', unit: '', note: '', photos: '' }]);
+      preserveDraftContent();
+      CONTENT.rooms = (CONTENT.rooms || []).concat([{ name: '', name_en: '', description: '', description_en: '', price: '', unit: '', unit_en: '', note: '', note_en: '', photos: '' }]);
+      markDirty();
       renderSections();
     };
     host.appendChild(add);
+  }
 
-    var workRoomsCard = el('div', { class: 'card' });
-    workRoomsCard.appendChild(el('h2', { text: '換宿住宿空間' }));
-    workRoomsCard.appendChild(el('div', { class: 'sub', text: '這裡的房間只顯示在網站換宿區，不會混進一般住宿房型。' }));
-    host.appendChild(workRoomsCard);
-    (CONTENT.work_rooms || []).forEach(function (room, index) { host.appendChild(renderWorkRoomCard(room, index)); });
-    var addWorkRoom = el('button', { class: 'btn btn-ghost', type: 'button', text: '＋ 新增換宿房間' });
-    addWorkRoom.onclick = function () {
-      CONTENT.work_rooms = collectWorkRooms().concat([{ name: '', name_en: '', description: '', description_en: '', photos: '' }]);
+  function renderWorkRoomEditors(host) {
+    var grid = el('div', { class: 'visual-room-grid' });
+    (CONTENT.work_rooms || []).forEach(function (room, index) { grid.appendChild(renderWorkRoomCard(room, index)); });
+    if (!(CONTENT.work_rooms || []).length) {
+      var empty = el('div', { class: 'visual-content-card' });
+      empty.appendChild(el('div', { class: 'editor-kind', text: '目前沒有換宿房間時，網站顯示' }));
+      empty.appendChild(renderVisualField('work_rooms_empty', 'visual-card-text'));
+      grid.appendChild(empty);
+    }
+    host.appendChild(grid);
+    var add = el('button', { class: 'btn btn-ghost', type: 'button', text: '＋ 新增換宿房間' });
+    add.style.marginTop = '16px';
+    add.onclick = function () {
+      preserveDraftContent();
+      CONTENT.work_rooms = (CONTENT.work_rooms || []).concat([{ name: '', name_en: '', description: '', description_en: '', photos: '' }]);
+      markDirty();
       renderSections();
     };
-    host.appendChild(addWorkRoom);
+    host.appendChild(add);
+  }
 
-    renderListEditors(host);
+  function renderHomeEditor(section, host) {
+    var layout = el('div', { class: 'visual-hero' });
+    var copy = el('div', { class: 'visual-stack' });
+    copy.appendChild(renderVisualField('hero_eyebrow', 'visual-eyebrow'));
+    copy.appendChild(renderVisualField('site_name', 'visual-title'));
+    copy.appendChild(renderVisualField('tagline', 'visual-subtitle'));
+    var actions = el('div', { class: 'visual-actions' });
+    actions.appendChild(renderVisualField('hero_cta_primary', 'visual-button primary'));
+    actions.appendChild(renderVisualField('hero_cta_secondary', 'visual-button secondary'));
+    copy.appendChild(actions);
+    var badges = el('div', { class: 'visual-badges' });
+    ['hero_badge_location', 'hero_badge_host', 'hero_badge_work'].forEach(function (key) {
+      badges.appendChild(renderVisualField(key, 'visual-badge'));
+    });
+    copy.appendChild(badges);
+    layout.appendChild(copy);
+    var photo = el('div', { class: 'visual-photo-panel' });
+    photo.appendChild(el('strong', { text: '首頁照片' }));
+    photo.appendChild(renderPhotoManager('hero', (CONTENT.settings || {}).hero_photos));
+    layout.appendChild(photo);
+    host.appendChild(layout);
+  }
+
+  function renderAboutEditor(section, host) {
+    host.appendChild(renderSectionIntro(section, 'about_eyebrow', 'about_title', 'intro_text'));
+    var cards = el('div', { class: 'visual-grid-3' });
+    cards.appendChild(renderVisualCard('feature_1_title', 'feature_1'));
+    cards.appendChild(renderVisualCard('feature_2_title', 'feature_2'));
+    cards.appendChild(renderVisualCard('feature_3_title', 'feature_3'));
+    host.appendChild(cards);
+  }
+
+  function renderStayEditor(section, host) {
+    host.appendChild(renderSectionIntro(section, 'stay_eyebrow', 'stay_title', 'accommodation_intro'));
+    renderRoomEditors(host);
+    var note = renderVisualField('booking_note', 'visual-card-text');
+    note.style.marginTop = '18px';
+    host.appendChild(note);
+  }
+
+  function renderWorkEditor(section, host) {
+    host.appendChild(renderSectionIntro(section, 'work_eyebrow', 'work_title', 'workexchange_intro'));
+    var stats = el('div', { class: 'visual-stat-grid' });
+    [['work_stat_duration_value', 'work_stat_duration_label'], ['work_stat_hours_value', 'work_stat_hours_label'], ['work_stat_schedule_value', 'work_stat_schedule_label']].forEach(function (pair) {
+      var stat = el('div', { class: 'visual-stat' });
+      stat.appendChild(renderVisualField(pair[0], 'visual-card-title'));
+      stat.appendChild(renderVisualField(pair[1], 'visual-card-text'));
+      stats.appendChild(stat);
+    });
+    host.appendChild(stats);
+    var workColumns = el('div', { class: 'visual-grid-2' });
+    var rules = el('div', { class: 'visual-content-card' });
+    rules.appendChild(renderVisualField('work_rules_title', 'visual-card-title'));
+    renderListEditors(rules, ['rules']);
+    workColumns.appendChild(rules);
+    var duties = el('div', { class: 'visual-content-card' });
+    duties.appendChild(renderVisualField('work_duties_title', 'visual-card-title'));
+    duties.appendChild(renderVisualField('work_duties_intro', 'visual-card-text'));
+    renderListEditors(duties, ['duties_out', 'duties_in']);
+    workColumns.appendChild(duties);
+    host.appendChild(workColumns);
+    var cta = el('div', { class: 'visual-cta' });
+    var ctaCopy = el('div', { class: 'visual-stack' });
+    ctaCopy.appendChild(renderVisualField('work_cta_title', 'visual-card-title'));
+    ctaCopy.appendChild(renderVisualField('work_cta_text', 'visual-card-text'));
+    cta.appendChild(ctaCopy);
+    cta.appendChild(renderVisualField('work_cta_button', 'visual-button primary'));
+    host.appendChild(cta);
+    var roomsIntro = el('div', { class: 'visual-stack' });
+    roomsIntro.style.marginTop = '28px';
+    roomsIntro.appendChild(renderVisualField('work_rooms_eyebrow', 'visual-eyebrow'));
+    roomsIntro.appendChild(renderVisualField('work_rooms_title', 'visual-title'));
+    roomsIntro.appendChild(renderVisualField('workexchange_rooms_intro', 'visual-subtitle'));
+    host.appendChild(roomsIntro);
+    renderWorkRoomEditors(host);
+  }
+
+  function renderNearbyEditor(section, host) {
+    host.appendChild(renderSectionIntro(section, 'nearby_eyebrow', 'nearby_title', 'nearby_intro'));
+    var cards = el('div', { class: 'visual-grid-2' });
+    cards.appendChild(renderVisualCard('nearby_transport_title', 'nearby_transport_text'));
+    cards.appendChild(renderVisualCard('nearby_essentials_title', 'nearby_essentials_text'));
+    cards.appendChild(renderVisualCard('nearby_explore_title', 'nearby_explore_text'));
+    cards.appendChild(renderVisualCard('nearby_farm_title', 'nearby_farm_text'));
+    host.appendChild(cards);
+    var photos = el('div', { class: 'visual-grid-3' });
+    ['1', '2', '3'].forEach(function (n) {
+      var photo = el('div', { class: 'visual-photo-panel' });
+      photo.appendChild(el('strong', { text: '風景照片 ' + n }));
+      photo.appendChild(renderPhotoManager('scenery-' + n, (CONTENT.settings || {})['scenery' + n + '_photos']));
+      photos.appendChild(photo);
+    });
+    host.appendChild(photos);
+  }
+
+  function renderApplyEditor(section, host) {
+    host.appendChild(renderSectionIntro(section, 'apply_eyebrow', 'apply_title', 'apply_intro'));
+    var forms = el('div', { class: 'visual-grid-3' });
+    [['住宿申請', 'stay_form_note'], ['換宿申請', 'work_form_note'], ['其他服務', 'services_form_note']].forEach(function (entry) {
+      var card = el('div', { class: 'visual-content-card' });
+      card.appendChild(el('h4', { text: entry[0] }));
+      card.appendChild(renderVisualField(entry[1], 'visual-card-text'));
+      forms.appendChild(card);
+    });
+    host.appendChild(forms);
+  }
+
+  function renderContactEditor(section, host) {
+    host.appendChild(renderSectionIntro(section, 'contact_eyebrow', 'contact_title'));
+    var cards = el('div', { class: 'visual-grid-3' });
+    cards.appendChild(renderVisualCard('contact_location_title', 'location_text'));
+    cards.appendChild(renderVisualCard('contact_email_title', 'contact_email'));
+    cards.appendChild(renderVisualCard('contact_phone_title', 'contact_line'));
+    host.appendChild(cards);
+    var footer = renderVisualField('footer_note', 'visual-card-text');
+    footer.style.marginTop = '22px';
+    host.appendChild(footer);
+  }
+
+  function renderWebsiteEditor(host) {
+    var toolbar = el('div', { class: 'website-toolbar' });
+    toolbar.appendChild(el('strong', { text: EDITOR_LANGUAGE === 'zh' ? '正在編輯中文網站' : 'Editing English website' }));
+    ['home', 'about', 'stay', 'work', 'nearby', 'apply', 'contact'].forEach(function (editorId) {
+      var section = sectionByEditorId(editorId);
+      var jump = el('button', { class: 'jump', type: 'button', text: section.title });
+      jump.onclick = function () {
+        var target = document.querySelector('[data-editor-section="' + editorId + '"]');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+      toolbar.appendChild(jump);
+    });
+    var language = el('button', {
+      class: 'language-toggle', id: 'editorLanguageButton', type: 'button',
+      text: EDITOR_LANGUAGE === 'zh' ? '切換英文內容' : '切換中文內容'
+    });
+    language.onclick = toggleEditorLanguage;
+    toolbar.appendChild(language);
+    host.appendChild(toolbar);
+
+    var canvas = el('div', { class: 'site-canvas' });
+    ['home', 'about', 'stay', 'work', 'nearby', 'apply', 'contact'].forEach(function (editorId) {
+      var section = sectionByEditorId(editorId);
+      var editor = el('section', { class: 'site-editor-section', 'data-editor-section': editorId });
+      editor.appendChild(renderSectionToolbar(section));
+      if (editorId === 'home') renderHomeEditor(section, editor);
+      if (editorId === 'about') renderAboutEditor(section, editor);
+      if (editorId === 'stay') renderStayEditor(section, editor);
+      if (editorId === 'work') renderWorkEditor(section, editor);
+      if (editorId === 'nearby') renderNearbyEditor(section, editor);
+      if (editorId === 'apply') renderApplyEditor(section, editor);
+      if (editorId === 'contact') renderContactEditor(section, editor);
+      canvas.appendChild(editor);
+    });
+    host.appendChild(canvas);
+  }
+
+  function toggleEditorLanguage() {
+    preserveDraftContent();
+    EDITOR_LANGUAGE = EDITOR_LANGUAGE === 'zh' ? 'en' : 'zh';
+    ACTIVE_ADMIN_PAGE = 'website';
+    renderSections();
+  }
+
+  function showAdminPage(pageId) {
+    var target = document.querySelector('[data-admin-page="' + pageId + '"]');
+    if (!target) pageId = ADMIN_PAGES[0].id;
+    ACTIVE_ADMIN_PAGE = pageId;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-admin-page]'), function (page) {
+      page.hidden = page.getAttribute('data-admin-page') !== pageId;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-admin-nav]'), function (button) {
+      if (button.getAttribute('data-admin-nav') === pageId) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+  }
+
+  function renderAdminPage(page) {
+    var pageHost = el('section', { class: 'admin-page', 'data-admin-page': page.id });
+    var heading = el('div', { class: 'admin-page-heading' });
+    heading.appendChild(el('h2', { text: page.label }));
+    heading.appendChild(el('p', { text: page.description }));
+    pageHost.appendChild(heading);
+    if (page.id === 'schedule') renderSchedule(pageHost);
+    if (page.id === 'website') renderWebsiteEditor(pageHost);
+    if (page.id === 'notifications') {
+      var card = el('div', { class: 'card settings-card' });
+      card.appendChild(renderTextField('notify_email', fieldMeta('notify_email').label, fieldMeta('notify_email')));
+      pageHost.appendChild(card);
+    }
+    return pageHost;
+  }
+
+  function renderSections() {
+    var host = document.getElementById('sections');
+    host.innerHTML = '';
+    var shell = el('div', { class: 'admin-shell' });
+    var nav = el('nav', { class: 'admin-nav', 'aria-label': '網站後台區塊' });
+    nav.appendChild(el('div', { class: 'admin-nav-title', text: '要處理哪一件事？' }));
+    var content = el('main', {});
+    ADMIN_PAGES.forEach(function (page) {
+      var button = el('button', { type: 'button', text: page.label, 'data-admin-nav': page.id });
+      button.onclick = function () { showAdminPage(page.id); };
+      nav.appendChild(button);
+      content.appendChild(renderAdminPage(page));
+    });
+    shell.appendChild(nav);
+    shell.appendChild(content);
+    host.appendChild(shell);
+    showAdminPage(ACTIVE_ADMIN_PAGE);
+    updateSaveState();
   }
 
   var MAX_IMAGE_EDGE = 1600;
@@ -616,11 +1019,19 @@
     var urls = splitUrls(photosValue);
 
     function persistOrder() {
+      if (!beginEditorWrite()) {
+        setMsg(status, 'err', '另一項內容正在儲存，請稍候。');
+        return;
+      }
       runAuth('reorderPhotos', section, urls).then(function (result) {
         updatePhotoState(section, result.urls);
         urls = result.urls;
         paint();
-      }).catch(function (error) { setMsg(status, 'err', '排序失敗：' + error); });
+        endEditorWrite();
+      }).catch(function (error) {
+        setMsg(status, 'err', '排序失敗：' + error);
+        endEditorWrite();
+      });
     }
 
     function paint() {
@@ -652,11 +1063,19 @@
           'border:0;background:rgba(255,255,255,.92);color:#b3401f;font-weight:700;cursor:pointer';
         remove.onclick = function () {
           if (!confirm('確定刪除這張照片？')) return;
+          if (!beginEditorWrite()) {
+            setMsg(status, 'err', '另一項內容正在儲存，請稍候。');
+            return;
+          }
           runAuth('deletePhoto', section, url).then(function (result) {
             updatePhotoState(section, result.urls);
             urls = result.urls;
             paint();
-          }).catch(function (error) { setMsg(status, 'err', '刪除失敗：' + error); });
+            endEditorWrite();
+          }).catch(function (error) {
+            setMsg(status, 'err', '刪除失敗：' + error);
+            endEditorWrite();
+          });
         };
         tile.appendChild(remove);
         grid.appendChild(tile);
@@ -669,6 +1088,10 @@
       var files = Array.prototype.slice.call(picker.files);
       picker.value = '';
       if (!files.length) return;
+      if (!beginEditorWrite()) {
+        setMsg(status, 'err', '另一項內容正在儲存，請稍候。');
+        return;
+      }
 
       setMsg(status, 'ok', '上傳中… (0/' + files.length + ')');
       var done = 0;
@@ -687,8 +1110,10 @@
         });
       }, Promise.resolve()).then(function () {
         setMsg(status, 'ok', '已上傳 ' + done + ' 張照片。');
+        endEditorWrite();
       }).catch(function (error) {
         setMsg(status, 'err', '上傳失敗：' + error);
+        endEditorWrite();
       });
     };
 
@@ -701,102 +1126,87 @@
   }
   var LIST_META = [
     { name: 'rules', title: '換宿章則' },
-    { name: 'duties_out', title: '戶外工作內容' },
-    { name: 'duties_in', title: '室內工作內容' }
+    { name: 'duties_out', title: '戶外工作內容', titleKey: 'work_duties_outdoor_title' },
+    { name: 'duties_in', title: '室內工作內容', titleKey: 'work_duties_indoor_title' }
   ];
 
-  function collectListItems(listName) {
-    return (CONTENT[listName] || []).map(function (_, index) {
-      return {
-        zh: document.getElementById('li' + listName + '_' + index + '_zh').value,
-        en: document.getElementById('li' + listName + '_' + index + '_en').value
-      };
-    }).filter(function (item) { return item.zh.trim() || item.en.trim(); });
+  function listFieldId(listName, index, language) {
+    return 'li' + listName + '_' + index + '_' + language;
   }
 
-  function saveOneList(listName, status) {
-    return runAuth('saveList', listName, collectListItems(listName)).then(function (result) {
-      CONTENT[listName] = result.items;
-      setMsg(status, 'ok', '已儲存。');
-      renderSections();
-    }).catch(function (error) {
-      setMsg(status, 'err', '儲存失敗：' + error);
+  function collectListItems(listName) {
+    return (CONTENT[listName] || []).map(function (item, index) {
+      var updated = Object.assign({}, item);
+      var input = document.getElementById(listFieldId(listName, index, EDITOR_LANGUAGE));
+      if (input) updated[EDITOR_LANGUAGE] = input.value;
+      return updated;
     });
   }
 
-  function renderListEditors(host) {
-    LIST_META.forEach(function (meta) {
-      var listName = meta.name;
-      var card = el('div', { class: 'card' });
-      card.appendChild(el('h2', { text: meta.title }));
-      card.appendChild(el('div', { class: 'sub', text: '編號會自動產生，不需要自己填。拖曳不支援，請用上下箭頭調整順序。' }));
+  function collectSaveListItems(listName) {
+    return collectListItems(listName).filter(function (item) {
+      return String(item.zh || '').trim() || String(item.en || '').trim();
+    });
+  }
 
-      var status = el('div', { class: 'msg' });
+  function renderListEditors(host, selectedNames) {
+    LIST_META.filter(function (meta) {
+      return !selectedNames || selectedNames.indexOf(meta.name) >= 0;
+    }).forEach(function (meta) {
+      var listName = meta.name;
+      var card = el('div', {});
+      if (meta.titleKey) card.appendChild(renderVisualField(meta.titleKey, 'visual-card-title'));
+      if (listName === 'rules') card.appendChild(el('div', { class: 'sub', text: '編號會自動產生，不需要自己填。' }));
       var items = CONTENT[listName] || [];
+      var list = el('div', { class: 'visual-list' });
 
       items.forEach(function (item, index) {
-        var block = el('div', {});
-        block.style.cssText = 'border-top:1px dashed #ece3d3;padding-top:12px;margin-top:12px';
+        var row = el('div', { class: 'visual-list-row' });
+        row.appendChild(el('span', { class: 'visual-list-number', text: String(index + 1) }));
+        var input = inputFor(item[EDITOR_LANGUAGE], true, listFieldId(listName, index, EDITOR_LANGUAGE));
+        input.className = 'visual-input visual-card-text';
+        input.setAttribute('aria-label', meta.title + '第 ' + (index + 1) + ' 項');
+        input.oninput = markDirty;
+        row.appendChild(input);
 
-        var header = el('div', {});
-        header.style.cssText = 'display:flex;align-items:center;gap:8px;justify-content:space-between';
-        header.appendChild(el('strong', { text: (listName === 'rules' ? '第 ' + (index + 1) + ' 條' : '第 ' + (index + 1) + ' 項') }));
-
-        var controls = el('div', {});
+        var controls = el('div', { class: 'visual-list-actions' });
         [['↑', -1], ['↓', 1]].forEach(function (pair) {
-          var move = el('button', { class: 'btn btn-ghost', type: 'button', text: pair[0] });
-          move.style.cssText = 'padding:4px 10px;margin-left:6px';
+          var move = el('button', { type: 'button', text: pair[0], 'aria-label': pair[1] < 0 ? '往上移' : '往下移' });
           move.disabled = (pair[1] < 0 && index === 0) || (pair[1] > 0 && index === items.length - 1);
           move.onclick = function () {
-            var current = collectListItems(listName);
+            preserveDraftContent();
+            var current = CONTENT[listName];
             var moved = current.splice(index, 1)[0];
             current.splice(index + pair[1], 0, moved);
             CONTENT[listName] = current;
+            markDirty();
             renderSections();
           };
           controls.appendChild(move);
         });
 
-        var remove = el('button', { class: 'btn btn-danger', type: 'button', text: '刪除這一項' });
-        remove.style.cssText = 'padding:4px 10px;margin-left:6px';
+        var remove = el('button', { class: 'remove-list-item', type: 'button', text: '刪除這一項' });
         remove.onclick = function () {
-          CONTENT[listName] = collectListItems(listName).filter(function (_, i) { return i !== index; });
+          preserveDraftContent();
+          CONTENT[listName] = CONTENT[listName].filter(function (_, i) { return i !== index; });
+          markDirty();
           renderSections();
         };
         controls.appendChild(remove);
-        header.appendChild(controls);
-        block.appendChild(header);
-
-        var row = el('div', { class: 'row' });
-
-        var zh = el('div', {});
-        zh.appendChild(el('label', { text: '中文' }));
-        zh.appendChild(inputFor(item.zh, true, 'li' + listName + '_' + index + '_zh'));
-
-        var en = el('div', {});
-        en.appendChild(el('label', { text: 'English（可留空）' }));
-        en.appendChild(inputFor(item.en, true, 'li' + listName + '_' + index + '_en'));
-
-        row.appendChild(zh);
-        row.appendChild(en);
-        block.appendChild(row);
-        card.appendChild(block);
+        row.appendChild(controls);
+        list.appendChild(row);
       });
+      card.appendChild(list);
 
       var add = el('button', { class: 'btn btn-ghost', type: 'button', text: '＋ 新增一項' });
-      add.style.marginTop = '16px';
+      add.style.marginTop = '12px';
       add.onclick = function () {
-        CONTENT[listName] = collectListItems(listName).concat([{ zh: '', en: '' }]);
+        preserveDraftContent();
+        CONTENT[listName] = (CONTENT[listName] || []).concat([{ zh: '', en: '' }]);
+        markDirty();
         renderSections();
       };
-
-      var save = el('button', { class: 'btn btn-primary', type: 'button', text: '儲存這份清單' });
-      save.style.cssText = 'margin-top:16px;margin-left:10px';
-      save.onclick = function () { saveOneList(listName, status); };
-
       card.appendChild(add);
-      card.appendChild(save);
-      card.appendChild(status);
       host.appendChild(card);
     });
   }
@@ -815,6 +1225,7 @@
     TOKEN = saved;
     runAuth('loadAdminContent').then(function (content) {
       CONTENT = content;
+      HAS_UNSAVED_CHANGES = false;
       showApp();
       renderSections();
     }).catch(function () { TOKEN = null; showLogin(''); });

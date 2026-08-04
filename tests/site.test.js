@@ -12,6 +12,21 @@ function formMarkup(id) {
   return match[0];
 }
 
+function divMarkup(id) {
+  const idIndex = site.indexOf(`id="${id}"`);
+  assert.notEqual(idIndex, -1, `missing ${id}`);
+  const start = site.lastIndexOf('<div', idIndex);
+  let depth = 0;
+  const tags = /<div\b|<\/div>/g;
+  tags.lastIndex = start;
+  let match;
+  while ((match = tags.exec(site))) {
+    depth += match[0] === '<div' ? 1 : -1;
+    if (depth === 0) return site.slice(start, tags.lastIndex);
+  }
+  assert.fail(`unclosed ${id}`);
+}
+
 test('online applications offer accommodation, work exchange, and other services as separate forms', () => {
   for (const id of ['seg-stay', 'seg-work', 'seg-services', 'formStay', 'formWork', 'formServices']) {
     assert.match(site, new RegExp(`id="${id}"`), `missing ${id}`);
@@ -59,8 +74,21 @@ test('the work-exchange section has a dedicated room gallery and every form carr
   }
 });
 
+test('work-exchange rooms occupy the details column under the apply prompt, separate from paid rooms', () => {
+  const details = divMarkup('work-details-column');
+  assert.match(details, /data-content="work_cta_button"/);
+  assert.match(details, /id="work-rooms-list"/);
+  assert.doesNotMatch(details, /id="rooms-list"/, 'paid accommodation must stay in its own section');
+});
+
 test('application forms keep browser-native required-field validation enabled', () => {
   for (const id of ['formStay', 'formWork', 'formServices']) {
     assert.doesNotMatch(formMarkup(id), /\snovalidate(?:\s|>)/, `${id} disables native validation`);
+  }
+});
+
+test('public photo areas contain no decorative helper copy', () => {
+  for (const key of ['hero_badge_sky', 'hero_photo_title', 'hero_photo_hint', 'scenery_heading', 'scenery1_label', 'scenery2_label', 'scenery3_label']) {
+    assert.doesNotMatch(site, new RegExp(`data-content="${key}"`));
   }
 });

@@ -162,19 +162,21 @@ test('buildResponseRow prevents spreadsheet formula execution in visitor-entered
 test('buildScheduleEntry uses stay dates and keeps earlier submissions distinguishable', () => {
   const get = getter({
     room_type: '主屋', checkin: '2026-09-10', checkout: '2026-09-12',
-    name_zh: '王美', email: 'mei@example.com', phone: '0211234567', vehicle_plate: 'ABC123'
+    name_zh: '王美', email: 'mei@example.com', phone: '0211234567', vehicle_plate: 'ABC123', guests: '2'
   });
   assert.deepEqual(lib.buildScheduleEntry('accommodation', get, new Date('2026-08-03T01:02:03Z'), '', 'app-1'), {
     id: 'app-1', submitted_at: new Date('2026-08-03T01:02:03Z'), start_date: '2026-09-10', end_date: '2026-09-12',
     type: '住宿申請', items: '主屋', applicant: '王美', email: 'mei@example.com', phone: '0211234567',
-    vehicle_plate: 'ABC123', details: '主屋', photo_url: '', status: '新申請', flag: ''
+    vehicle_plate: 'ABC123', people_count: 2, quantity: '', details: '主屋 2 人', photo_url: '',
+    status: '新申請', conflict: '', flag: ''
   });
 });
 
 test('buildScheduleEntry spans the earliest and latest date in a multi-service request', () => {
   const get = getter({
     services: '寄放行李 / 接機 / 市區接送', service_start: '2026-09-10', service_end: '2026-09-17',
-    pickup_date: '2026-09-08', city_date: '2026-09-20', name_en: 'Mei Wang'
+    luggage_count: '4', pickup_date: '2026-09-08', pickup_pax: '3', city_date: '2026-09-20',
+    city_pax: '2', name_en: 'Mei Wang'
   });
   const entry = lib.buildScheduleEntry('services', get, new Date('2026-08-03T01:02:03Z'), '', 'app-2');
   assert.equal(entry.start_date, '2026-09-08');
@@ -184,6 +186,46 @@ test('buildScheduleEntry spans the earliest and latest date in a multi-service r
   assert.match(entry.details, /行李/);
   assert.match(entry.details, /接機/);
   assert.match(entry.details, /市區接送/);
+  assert.equal(entry.people_count, 3, 'the same travelling party is not counted twice across services');
+  assert.equal(entry.quantity, '行李 4 件');
+});
+
+test('buildScheduleEntry shows both luggage and vehicle quantities for a combined storage request', () => {
+  const entry = lib.buildScheduleEntry('services', getter({
+    services: '寄放行李 / 寄放車輛', luggage_count: '5', vehicle_plate: 'ABC123'
+  }), new Date('2026-08-03T01:02:03Z'), '', 'app-storage');
+
+  assert.equal(entry.people_count, '');
+  assert.equal(entry.quantity, '行李 5 件 / 車輛 1 台');
+});
+
+test('scheduleConflictMessages flags overlapping active accommodation requests for the same room only', () => {
+  const rows = [
+    { id: 'a', type: '住宿申請', items: '主屋', start_date: '2026-09-10', end_date: '2026-09-12', status: '新申請' },
+    { id: 'b', type: '住宿申請', items: '主屋', start_date: '2026-09-11', end_date: '2026-09-14', status: '已確認' },
+    { id: 'c', type: '住宿申請', items: '帳棚', start_date: '2026-09-11', end_date: '2026-09-13', status: '新申請' },
+    { id: 'd', type: '住宿申請', items: '主屋', start_date: '2026-09-11', end_date: '2026-09-13', status: '已取消' }
+  ];
+
+  assert.deepEqual(lib.scheduleConflictMessages(rows), {
+    a: '⚠️ 同房型日期可能重疊',
+    b: '⚠️ 同房型日期可能重疊',
+    c: '',
+    d: ''
+  });
+});
+
+test('schedule sorting and conflict checks accept real Google Sheet date cells', () => {
+  const september = { start_date: new Date('2026-09-02T00:00:00Z'), submitted_at: new Date('2026-08-02T00:00:00Z') };
+  const october = { start_date: new Date('2026-10-01T00:00:00Z'), submitted_at: new Date('2026-08-01T00:00:00Z') };
+  assert.deepEqual([october, september].sort(lib.compareScheduleEntries), [september, october]);
+
+  const conflicts = lib.scheduleConflictMessages([
+    { id: 'sheet-a', type: '住宿申請', items: '主屋', start_date: new Date('2026-09-10'), end_date: new Date('2026-09-12'), status: '新申請' },
+    { id: 'sheet-b', type: '住宿申請', items: '主屋', start_date: new Date('2026-09-11'), end_date: new Date('2026-09-14'), status: '已確認' }
+  ]);
+  assert.equal(conflicts['sheet-a'], '⚠️ 同房型日期可能重疊');
+  assert.equal(conflicts['sheet-b'], '⚠️ 同房型日期可能重疊');
 });
 
 test('buildScheduleEntry ignores stale dates belonging to unselected services', () => {

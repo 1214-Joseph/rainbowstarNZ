@@ -111,36 +111,71 @@ test('buildContentPayload_ still succeeds when every content tab is missing', ()
 });
 
 /** A writable stand-in supporting appendRow, setValue, setValues and clear. */
-function fakeWritableSheet(values) {
+function fakeWritableSheet(values, rowArtifacts) {
   const rows = values.map((r) => r.slice());
+  const artifacts = (rowArtifacts || values.map(() => null)).slice();
+  let clearCount = 0;
+  let moveRowsCount = 0;
+  let hidden = false;
 
   function ensure(rowIndex, colCount) {
-    while (rows.length <= rowIndex) rows.push([]);
+    while (rows.length <= rowIndex) {
+      rows.push([]);
+      artifacts.push(null);
+    }
     while (rows[rowIndex].length < colCount) rows[rowIndex].push('');
   }
 
-  return {
+  const sheet = {
     rows,
+    artifacts,
+    get clearCount() { return clearCount; },
+    get moveRowsCount() { return moveRowsCount; },
+    get hidden() { return hidden; },
     getLastRow: () => rows.length,
     getDataRange: () => ({ getValues: () => rows }),
-    appendRow: (row) => rows.push(row.slice()),
-    clear: () => { rows.length = 0; },
-    getRange: (startRow, startCol, numRows, numCols) => ({
-      setValue: (value) => {
-        ensure(startRow - 1, startCol);
-        rows[startRow - 1][startCol - 1] = value;
-      },
-      setValues: (newValues) => {
-        const height = numRows === undefined ? newValues.length : numRows;
-        for (let i = 0; i < height; i++) {
-          ensure(startRow - 1 + i, startCol - 1 + newValues[i].length);
-          for (let j = 0; j < newValues[i].length; j++) {
-            rows[startRow - 1 + i][startCol - 1 + j] = newValues[i][j];
+    appendRow: (row) => {
+      rows.push(row.slice());
+      artifacts.push(null);
+    },
+    clear: () => {
+      clearCount++;
+      rows.length = 0;
+      artifacts.length = 0;
+    },
+    getRange: (startRow, startCol, numRows, numCols) => {
+      const range = {
+        __startRow: startRow,
+        __numRows: numRows || 1,
+        setValue: (value) => {
+          ensure(startRow - 1, startCol);
+          rows[startRow - 1][startCol - 1] = value;
+        },
+        setValues: (newValues) => {
+          const height = numRows === undefined ? newValues.length : numRows;
+          for (let i = 0; i < height; i++) {
+            ensure(startRow - 1 + i, startCol - 1 + newValues[i].length);
+            for (let j = 0; j < newValues[i].length; j++) {
+              rows[startRow - 1 + i][startCol - 1 + j] = newValues[i][j];
+            }
           }
         }
-      }
-    })
+      };
+      return range;
+    },
+    moveRows: (range, destinationIndex) => {
+      moveRowsCount++;
+      const sourceIndex = range.__startRow - 1;
+      const movedRows = rows.splice(sourceIndex, range.__numRows);
+      const movedArtifacts = artifacts.splice(sourceIndex, range.__numRows);
+      rows.splice(destinationIndex - 1, 0, ...movedRows);
+      artifacts.splice(destinationIndex - 1, 0, ...movedArtifacts);
+    },
+    hideSheet: () => { hidden = true; return sheet; },
+    showSheet: () => { hidden = false; return sheet; },
+    isSheetHidden: () => hidden
   };
+  return sheet;
 }
 
 function fakeWritableSpreadsheet(sheetsByName) {
@@ -290,6 +325,22 @@ test('handlePost_ routes a multi-select service request and adds one sorted sche
   assert.equal(schedule[0].status, '新申請');
 });
 
+test('handlePost_ hides a newly created storage tab after keeping the owner sheets visible', () => {
+  const ss = fakeWritableSpreadsheet({});
+  global.MailApp = { sendEmail: () => {} };
+  global.Session = { getEffectiveUser: () => ({ getEmail: () => 'fallback@example.com' }) };
+
+  const result = code.handlePost_(ss, {
+    parameter: { type: 'services', application_id: 'visibility-1', name_zh: '王美', services: '寄放行李' },
+    parameters: {}
+  }, STAMP);
+
+  assert.equal(result.ok, true);
+  assert.equal(ss.getSheetByName('其他服務申請').hidden, true);
+  assert.equal(ss.getSheetByName('管理總覽').hidden, false);
+  assert.equal(ss.getSheetByName('排程總覽').hidden, false);
+});
+
 test('appendSchedule_ sorts by service date and then preserves first-application priority', () => {
   const ss = fakeWritableSpreadsheet({});
   const make = (id, submitted, date) => ({
@@ -302,6 +353,58 @@ test('appendSchedule_ sorts by service date and then preserves first-application
   code.appendSchedule_(ss, make('first-submit', '2026-08-01T00:00:00Z', '2026-09-10'));
 
   assert.deepEqual(code.readSchedule_(ss).map((row) => row.id), ['earlier-date', 'first-submit', 'later-submit']);
+});
+
+test('appendSchedule_ writes overlap warnings for active requests sharing a room and dates', () => {
+  const ss = fakeWritableSpreadsheet({});
+  const make = (id, start, end, room) => ({
+    id, submitted_at: STAMP, start_date: start, end_date: end, type: '住宿申請', items: room,
+    applicant: id, people_count: 2, quantity: '', email: '', phone: '', vehicle_plate: '', details: '',
+    photo_url: '', status: '新申請', conflict: '', flag: ''
+  });
+
+  code.appendSchedule_(ss, make('app-1', '2026-09-10', '2026-09-12', '主屋'));
+  code.appendSchedule_(ss, make('app-2', '2026-09-11', '2026-09-14', '主屋'));
+  code.appendSchedule_(ss, make('app-3', '2026-09-11', '2026-09-13', '帳棚'));
+
+  const byId = Object.fromEntries(code.readSchedule_(ss).map((row) => [row.id, row]));
+  assert.equal(byId['app-1'].conflict, '⚠️ 同房型日期可能重疊');
+  assert.equal(byId['app-2'].conflict, '⚠️ 同房型日期可能重疊');
+  assert.equal(byId['app-3'].conflict, '');
+});
+
+test('readSchedule_ serializes Google Sheet date cells for the web admin', () => {
+  const header = code.SCHEDULE_COLUMNS.map((field) => field[1]);
+  const entry = {
+    id: 'sheet-date', submitted_at: STAMP, start_date: new Date('2026-09-10'), end_date: new Date('2026-09-12'),
+    type: '住宿申請', items: '主屋', applicant: '王美', status: '新申請'
+  };
+  const ss = fakeWritableSpreadsheet({
+    排程總覽: fakeWritableSheet([header, code.SCHEDULE_COLUMNS.map((field) => entry[field[0]] || '')])
+  });
+
+  const row = code.readSchedule_(ss)[0];
+  assert.equal(row.start_date, '2026-09-10');
+  assert.equal(row.end_date, '2026-09-12');
+});
+
+test('buildManagementDashboardRows_ distinguishes applications, confirmed bookings and service categories', () => {
+  const rows = code.buildManagementDashboardRows_();
+  const formulaByLabel = Object.fromEntries(rows.slice(1).filter((row) => row[0]).map((row) => [row[0], row[1]]));
+
+  assert.equal(formulaByLabel['全部申請'], "=COUNTA('排程總覽'!A2:A)");
+  assert.equal(formulaByLabel['待處理新申請'], "=COUNTIF('排程總覽'!O2:O,\"新申請\")");
+  assert.equal(formulaByLabel['已確認住宿組數'], "=COUNTIFS('排程總覽'!E2:E,\"住宿申請\",'排程總覽'!O2:O,\"已確認\")");
+  assert.equal(formulaByLabel['已確認住宿人數'], "=SUMIFS('排程總覽'!H2:H,'排程總覽'!E2:E,\"住宿申請\",'排程總覽'!O2:O,\"已確認\")");
+  assert.equal(formulaByLabel['寄放行李申請'], "=COUNTIFS('排程總覽'!F2:F,\"*寄放行李*\",'排程總覽'!O2:O,\"<>已取消\")");
+});
+
+test('ensureManagementDashboard_ creates the owner summary sheet with live formulas', () => {
+  const ss = fakeWritableSpreadsheet({});
+  const result = code.ensureManagementDashboard_(ss);
+
+  assert.equal(result.created, true);
+  assert.deepEqual(ss.getSheetByName('管理總覽').rows, code.buildManagementDashboardRows_());
 });
 
 test('appendSchedule_ preserves manually added schedule columns while sorting', () => {
@@ -326,6 +429,30 @@ test('appendSchedule_ preserves manually added schedule columns while sorting', 
   assert.equal(rows[1][0], 'new-id');
   assert.equal(rows[2][0], 'old-id');
   assert.equal(rows[2][rows[2].length - 1], '請電話確認');
+});
+
+test('appendSchedule_ moves complete rows without clearing owner formulas, notes or formatting', () => {
+  const header = code.SCHEDULE_COLUMNS.map((field) => field[1]).concat(['屋主公式']);
+  const rowFor = (id, date) => code.SCHEDULE_COLUMNS.map((field) => ({
+    id, submitted_at: STAMP, start_date: date, end_date: date, type: '住宿申請', items: '主屋',
+    applicant: id, status: '新申請'
+  })[field[0]] || '').concat(['=ROW()']);
+  const scheduleSheet = fakeWritableSheet(
+    [header, rowFor('later', '2026-09-12'), rowFor('earlier', '2026-09-10')],
+    ['header-format', 'later-row-artifacts', 'earlier-row-artifacts']
+  );
+  const ss = fakeWritableSpreadsheet({ 排程總覽: scheduleSheet });
+
+  code.appendSchedule_(ss, {
+    id: 'middle', submitted_at: STAMP, start_date: '2026-09-11', end_date: '2026-09-11',
+    type: '住宿申請', items: '主屋', applicant: 'middle', status: '新申請', conflict: '', flag: ''
+  });
+
+  const idColumn = header.indexOf('申請編號');
+  const artifactById = Object.fromEntries(scheduleSheet.rows.slice(1).map((row, index) => [row[idColumn], scheduleSheet.artifacts[index + 1]]));
+  assert.equal(scheduleSheet.clearCount, 0, 'sorting must not clear the owner-managed sheet');
+  assert.equal(artifactById.earlier, 'earlier-row-artifacts');
+  assert.equal(artifactById.later, 'later-row-artifacts');
 });
 
 test('withDataLock_ serializes web-app sheet rewrites and always releases the script lock', () => {
@@ -374,9 +501,11 @@ test('handlePost_ treats the same client application id as one submission', () =
   };
 
   assert.equal(code.handlePost_(ss, event, STAMP).ok, true);
+  ss.getSheetByName('住宿申請').showSheet();
   assert.equal(code.handlePost_(ss, event, new Date(STAMP.getTime() + 1000)).ok, true);
 
   assert.equal(ss.getSheetByName('住宿申請').rows.length, 2, 'header plus one response');
+  assert.equal(ss.getSheetByName('住宿申請').hidden, true, 'a retry restores the simple owner view');
   assert.equal(code.readSchedule_(ss).length, 1, 'one schedule entry');
 });
 
@@ -1004,7 +1133,125 @@ test('loadAdminContent includes the private schedule while the public payload do
   assert.equal(schedule[0].submitted_at, '2026-07-09T12:00:00.000Z', 'google.script.run receives a serializable string');
 });
 
-test('updateScheduleStatus changes only the named application', () => {
+test('loadAdminContent locks schedule migration and dashboard reads against concurrent submissions', () => {
+  const token = authorizedToken();
+  const calls = [];
+  const ss = fakeWritableSpreadsheet({});
+  const previousSpreadsheetApp = global.SpreadsheetApp;
+  global.LockService = {
+    getScriptLock: () => ({
+      waitLock: (milliseconds) => calls.push(['wait', milliseconds]),
+      releaseLock: () => calls.push(['release'])
+    })
+  };
+  global.SpreadsheetApp = {
+    getActiveSpreadsheet: () => ss,
+    flush: () => calls.push(['flush'])
+  };
+
+  try {
+    code.loadAdminContent(token);
+  } finally {
+    delete global.LockService;
+    if (previousSpreadsheetApp === undefined) delete global.SpreadsheetApp;
+    else global.SpreadsheetApp = previousSpreadsheetApp;
+  }
+
+  assert.deepEqual(calls, [['wait', 20000], ['flush'], ['release']]);
+});
+
+test('loadAdminContent repairs a raw application that is missing from the schedule', () => {
+  const token = authorizedToken();
+  const data = {
+    application_id: 'accommodation-repair-1', name_zh: '王美', room_type: '主屋', guests: '3',
+    checkin: '2026-09-10', checkout: '2026-09-12', email: 'mei@example.com', phone: '0211234567'
+  };
+  const fields = code.__lib.ACCOM_FIELDS;
+  const rawRow = code.__lib.buildResponseRow(fields, (key) => data[key] || '', STAMP, '');
+  const ss = fakeWritableSpreadsheet({
+    住宿申請: fakeWritableSheet([code.__lib.buildHeaderRow(fields), rawRow])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+
+  const loaded = code.loadAdminContent(token);
+
+  assert.equal(loaded.schedule.length, 1);
+  assert.equal(loaded.schedule[0].id, 'accommodation-repair-1');
+  assert.equal(loaded.schedule[0].people_count, 3);
+  assert.equal(ss.getSheetByName('管理總覽') !== null, true);
+});
+
+test('loadAdminContent backfills new people and quantity columns for existing legacy schedule rows', () => {
+  const token = authorizedToken();
+  const data = {
+    application_id: 'accommodation-legacy-1', name_zh: '王美', room_type: '主屋', guests: '4',
+    checkin: '2026-09-10', checkout: '2026-09-12'
+  };
+  const fields = code.__lib.ACCOM_FIELDS;
+  const rawRow = code.__lib.buildResponseRow(fields, (key) => data[key] || '', STAMP, '');
+  const scheduleData = {
+    id: 'accommodation-legacy-1', submitted_at: STAMP, start_date: '2026-09-10', end_date: '2026-09-12',
+    type: '住宿申請', items: '主屋', applicant: '王美', status: '新申請'
+  };
+  const header = code.SCHEDULE_COLUMNS.map((field) => field[1]);
+  const ss = fakeWritableSpreadsheet({
+    住宿申請: fakeWritableSheet([code.__lib.buildHeaderRow(fields), rawRow]),
+    排程總覽: fakeWritableSheet([header, code.SCHEDULE_COLUMNS.map((field) => scheduleData[field[0]] || '')])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+
+  const loaded = code.loadAdminContent(token);
+
+  assert.equal(loaded.schedule.length, 1);
+  assert.equal(loaded.schedule[0].people_count, 4);
+});
+
+test('loadAdminContent restores date priority after an owner manually reorders schedule rows', () => {
+  const token = authorizedToken();
+  const header = code.SCHEDULE_COLUMNS.map((field) => field[1]);
+  function scheduleRow(data) { return code.SCHEDULE_COLUMNS.map((field) => data[field[0]] || ''); }
+  const ss = fakeWritableSpreadsheet({
+    排程總覽: fakeWritableSheet([
+      header,
+      scheduleRow({ id: 'later', submitted_at: '2026-08-02T01:00:00.000Z', start_date: '2026-10-10', type: '住宿申請', status: '新申請' }),
+      scheduleRow({ id: 'earlier', submitted_at: '2026-08-03T01:00:00.000Z', start_date: '2026-09-10', type: '住宿申請', status: '新申請' })
+    ])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+
+  const loaded = code.loadAdminContent(token);
+
+  assert.deepEqual(loaded.schedule.map((row) => row.id), ['earlier', 'later']);
+  const idColumn = header.indexOf('申請編號');
+  const physicalIds = ss.getSheetByName('排程總覽').getDataRange().getValues().slice(1).map((row) => row[idColumn]);
+  assert.deepEqual(physicalIds, ['earlier', 'later']);
+});
+
+test('loadAdminContent shows only the two owner-facing sheets and keeps storage tabs recoverable', () => {
+  const token = authorizedToken();
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([]),
+    rooms: fakeWritableSheet([]),
+    work_rooms: fakeWritableSheet([]),
+    workexchange_lists: fakeWritableSheet([]),
+    住宿申請: fakeWritableSheet([]),
+    換宿申請: fakeWritableSheet([]),
+    其他服務申請: fakeWritableSheet([]),
+    errors: fakeWritableSheet([]),
+    家人備註: fakeWritableSheet([])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+
+  code.loadAdminContent(token);
+
+  for (const name of ['管理總覽', '排程總覽']) assert.equal(ss.getSheetByName(name).hidden, false, `${name} should remain visible`);
+  for (const name of ['settings', 'rooms', 'work_rooms', 'workexchange_lists', '住宿申請', '換宿申請', '其他服務申請', 'errors']) {
+    assert.equal(ss.getSheetByName(name).hidden, true, `${name} should be hidden, not deleted`);
+  }
+  assert.equal(ss.getSheetByName('家人備註').hidden, false, 'owner-created sheets are left alone');
+});
+
+test('updateScheduleStatus accepts completed and changes only the named application', () => {
   const token = authorizedToken();
   const header = code.SCHEDULE_COLUMNS.map((field) => field[1]);
   function scheduleRow(data) { return code.SCHEDULE_COLUMNS.map((field) => data[field[0]] || ''); }
@@ -1017,9 +1264,10 @@ test('updateScheduleStatus changes only the named application', () => {
   });
   global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
 
-  const result = code.updateScheduleStatus(token, 'app-2', '已確認');
+  const result = code.updateScheduleStatus(token, 'app-2', '已完成');
   assert.equal(result.ok, true);
-  assert.deepEqual(code.readSchedule_(ss).map((row) => row.status), ['新申請', '已確認']);
+  assert.deepEqual(result.schedule.map((row) => row.status), ['新申請', '已完成']);
+  assert.deepEqual(code.readSchedule_(ss).map((row) => row.status), ['新申請', '已完成']);
   assert.throws(() => code.updateScheduleStatus(token, 'app-1', '亂填狀態'), /未知的狀態/);
 });
 
@@ -1138,14 +1386,14 @@ test('doGet with no parameters returns JSON whose settings has no notify_email',
 
 test('loadAdminContent(validToken) returns settings that includes notify_email', () => {
   const token = authorizedToken();
-  const ss = fakeSpreadsheet({
-    settings: fakeSheet([
+  const ss = fakeWritableSpreadsheet({
+    settings: fakeWritableSheet([
       ['key', 'value'],
       ['site_name', 'Rainbowstar'],
       ['notify_email', 'owner@example.com']
     ]),
-    rooms: fakeSheet([['name']]),
-    workexchange_lists: fakeSheet([['list', 'order', 'text_zh', 'text_en']])
+    rooms: fakeWritableSheet([['name']]),
+    workexchange_lists: fakeWritableSheet([['list', 'order', 'text_zh', 'text_en']])
   });
   global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
 

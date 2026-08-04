@@ -404,11 +404,6 @@ var Rainbowstar = (function () {
     'photo', 'photo1', 'photo2', 'photo3', 'photo4', 'photo5', 'photo6', 'photo7', 'photo8',
     'photos', 'images', 'image', 'image1', 'image2', 'image3', 'image4', 'img', 'photo_url'
   ];
-  var DEMO_GRADIENTS = [
-    'linear-gradient(150deg,#eaf5ee,#f3ecd9)',
-    'linear-gradient(150deg,#e3eef8,#eef4e9)',
-    'linear-gradient(150deg,#f4ede0,#e9f4ee)'
-  ];
   var ROOM_ACCENTS = ['#2f8f57', '#4c9ed4', '#f2a63c', '#ec6a45', '#9a86cf'];
 
   function collectPhotos(room) {
@@ -435,11 +430,7 @@ var Rainbowstar = (function () {
   }
 
   function roomSlides(room) {
-    var urls = collectPhotos(room);
-    if (urls.length) return urls.map(function (url) { return { url: url }; });
-    return DEMO_GRADIENTS.map(function (gradient) {
-      return { gradient: gradient, labelZh: '房型照片', labelEn: 'Room photo' };
-    });
+    return collectPhotos(room).map(function (url) { return { url: url }; });
   }
 
   function makeSlide(slide) {
@@ -586,6 +577,22 @@ var Rainbowstar = (function () {
 
   function setupPhotoHost(host, slides, meta) {
     if (!host) return;
+    host.innerHTML = '';
+    host.onclick = null;
+    host.style.cursor = '';
+    if (!slides.length) {
+      host.style.display = 'flex';
+      host.style.alignItems = 'center';
+      host.style.justifyContent = 'center';
+      host.style.background = '#f4f1e8';
+      host.style.color = '#aaa28f';
+      var icon = document.createElement('span');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.setAttribute('style', 'font-size:28px;line-height:1');
+      icon.textContent = '▧';
+      host.appendChild(icon);
+      return;
+    }
     buildCarousel(host, slides, 0);
     host.style.cursor = 'zoom-in';
     addEnlargeHint(host);
@@ -712,7 +719,7 @@ var Rainbowstar = (function () {
       host.appendChild(empty);
       return;
     }
-    host.setAttribute('style', 'margin-top:26px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,340px));gap:22px');
+    host.setAttribute('style', 'margin-top:26px;display:grid;grid-template-columns:1fr;gap:22px');
     list.forEach(function (room, index) { host.appendChild(buildWorkRoomCard(room, index, lang)); });
   }
 
@@ -720,16 +727,17 @@ var Rainbowstar = (function () {
     var hero = document.getElementById('heroPhoto');
     if (!hero) return;
 
-    var slides = urls.length
-      ? urls.map(function (url) { return { url: url }; })
-      : DEMO_GRADIENTS.map(function (gradient) {
-          return { gradient: gradient, labelZh: '農場實景', labelEn: 'Farm photo' };
-        });
+    var placeholder = document.getElementById('heroPhotoPh');
+    var oldHint = hero.querySelector('.rbzoom');
+    if (oldHint && oldHint.parentNode) oldHint.parentNode.removeChild(oldHint);
+    hero.onclick = null;
+    hero.style.cursor = '';
+    hero.style.backgroundImage = '';
+    if (placeholder) placeholder.style.display = '';
+    if (!urls.length) return;
 
-    if (urls.length) {
-      var placeholder = document.getElementById('heroPhotoPh');
-      if (placeholder) placeholder.style.display = 'none';
-    }
+    var slides = urls.map(function (url) { return { url: url }; });
+    if (placeholder) placeholder.style.display = 'none';
 
     hero.style.cursor = 'zoom-in';
     addEnlargeHint(hero);
@@ -738,11 +746,9 @@ var Rainbowstar = (function () {
       openLightbox(slides, 0, { name: siteName ? siteName.textContent : '彩虹星民宿' });
     };
 
-    if (urls.length) {
-      hero.style.backgroundImage = 'url("' + urls[0].replace(/"/g, '%22') + '")';
-      hero.style.backgroundSize = 'cover';
-      hero.style.backgroundPosition = 'center';
-    }
+    hero.style.backgroundImage = 'url("' + urls[0].replace(/"/g, '%22') + '")';
+    hero.style.backgroundSize = 'cover';
+    hero.style.backgroundPosition = 'center';
   }
 
   function applySceneryPhotos(settings) {
@@ -751,29 +757,26 @@ var Rainbowstar = (function () {
       if (!tile) return;
 
       var urls = splitUrls(settings['scenery' + n + '_photos'] || settings['scenery' + n]);
-      var label = tile.querySelector('span[data-zh]');
-      var labelZh = contentValue(settings, 'scenery' + n + '_label', 'zh') || (label ? label.getAttribute('data-zh') : '');
-      var labelEn = contentValue(settings, 'scenery' + n + '_label', 'en') || (label ? label.getAttribute('data-en') : '');
+      var oldHint = tile.querySelector('.rbzoom');
+      if (oldHint && oldHint.parentNode) oldHint.parentNode.removeChild(oldHint);
+      tile.onclick = null;
+      tile.style.cursor = '';
+      tile.style.backgroundImage = '';
+      Array.prototype.forEach.call(tile.children, function (child) { child.style.display = ''; });
+      if (!urls.length) return;
 
       tile.style.cursor = 'zoom-in';
       addEnlargeHint(tile);
-
-      if (urls.length) {
-        tile.style.backgroundImage = 'url("' + urls[0].replace(/"/g, '%22') + '")';
-        tile.style.backgroundSize = 'cover';
-        tile.style.backgroundPosition = 'center';
-        Array.prototype.forEach.call(tile.children, function (child) {
-          if (!child.classList || !child.classList.contains('rbzoom')) child.style.display = 'none';
-        });
-      }
+      tile.style.backgroundImage = 'url("' + urls[0].replace(/"/g, '%22') + '")';
+      tile.style.backgroundSize = 'cover';
+      tile.style.backgroundPosition = 'center';
+      Array.prototype.forEach.call(tile.children, function (child) {
+        if (!child.classList || !child.classList.contains('rbzoom')) child.style.display = 'none';
+      });
 
       tile.onclick = function () {
-        var slides = urls.length
-          ? urls.map(function (url) { return { url: url }; })
-          : DEMO_GRADIENTS.map(function (gradient) {
-              return { gradient: gradient, labelZh: labelZh, labelEn: labelEn };
-            });
-        openLightbox(slides, 0, { name: state.lang === 'en' ? labelEn : labelZh });
+        var slides = urls.map(function (url) { return { url: url }; });
+        openLightbox(slides, 0, {});
       };
     });
   }
@@ -1317,8 +1320,10 @@ var Rainbowstar = (function () {
     workRoomsToRender: workRoomsToRender,
     collectPhotos: collectPhotos,
     roomPrice: roomPrice,
+    roomSlides: roomSlides,
     makeSlide: makeSlide,
     buildCarousel: buildCarousel,
+    setupPhotoHost: setupPhotoHost,
     openLightbox: openLightbox,
     closeLightbox: closeLightbox,
     renderRooms: renderRooms,

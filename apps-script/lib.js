@@ -176,6 +176,45 @@ function scheduleDetails_(type, get) {
   return details.filter(Boolean).join('；');
 }
 
+function positiveCount_(value) {
+  var count = Number(value);
+  return isFinite(count) && count > 0 ? count : '';
+}
+
+function schedulePeopleCount_(type, get) {
+  if (type === 'accommodation') return positiveCount_(get('guests'));
+  if (type === 'workexchange') return 1;
+
+  var selected = String(get('services') || '').split(/\s*\/\s*/);
+  var counts = [];
+  if (selected.indexOf('接機') >= 0) counts.push(positiveCount_(get('pickup_pax')));
+  if (selected.indexOf('送機') >= 0) counts.push(positiveCount_(get('dropoff_pax')));
+  if (selected.indexOf('市區接送') >= 0) counts.push(positiveCount_(get('city_pax')));
+  counts = counts.filter(function (count) { return count !== ''; });
+  return counts.length ? Math.max.apply(Math, counts) : '';
+}
+
+function scheduleQuantity_(type, get) {
+  if (type !== 'services') return '';
+
+  var selected = String(get('services') || '').split(/\s*\/\s*/);
+  var quantities = [];
+  var luggageCount = positiveCount_(get('luggage_count'));
+  if (selected.indexOf('寄放行李') >= 0 && luggageCount !== '') quantities.push('行李 ' + luggageCount + ' 件');
+  if (selected.indexOf('寄放車輛') >= 0) quantities.push('車輛 1 台');
+  return quantities.join(' / ');
+}
+
+function scheduleDateKey_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    function pad(number) { return number < 10 ? '0' + number : String(number); }
+    return value.getFullYear() + '-' + pad(value.getMonth() + 1) + '-' + pad(value.getDate());
+  }
+  var text = String(value || '').trim();
+  var isoDate = text.match(/^\d{4}-\d{2}-\d{2}/);
+  return isoDate ? isoDate[0] : text;
+}
+
 function buildScheduleEntry(type, get, timestamp, flag, id) {
   var dates = scheduleDates_(type, get);
   var label = type === 'workexchange' ? '換宿申請' : (type === 'services' ? '其他服務' : '住宿申請');
@@ -193,16 +232,41 @@ function buildScheduleEntry(type, get, timestamp, flag, id) {
     email: get('email'),
     phone: get('phone'),
     vehicle_plate: get('vehicle_plate'),
+    people_count: schedulePeopleCount_(type, get),
+    quantity: scheduleQuantity_(type, get),
     details: scheduleDetails_(type, get),
     photo_url: type === 'workexchange' ? get('photo_url') : '',
     status: '新申請',
+    conflict: '',
     flag: flag
   };
 }
 
+function scheduleConflictMessages(rows) {
+  var messages = {};
+  var active = (rows || []).filter(function (row) {
+    messages[String(row.id || '')] = '';
+    return row.type === '住宿申請' && row.items && row.start_date && row.end_date
+      && row.status !== '已取消' && row.status !== '已完成';
+  });
+
+  for (var i = 0; i < active.length; i++) {
+    for (var j = i + 1; j < active.length; j++) {
+      var first = active[i];
+      var second = active[j];
+      var overlaps = scheduleDateKey_(first.start_date) < scheduleDateKey_(second.end_date)
+        && scheduleDateKey_(second.start_date) < scheduleDateKey_(first.end_date);
+      if (first.items !== second.items || !overlaps) continue;
+      messages[String(first.id)] = '⚠️ 同房型日期可能重疊';
+      messages[String(second.id)] = '⚠️ 同房型日期可能重疊';
+    }
+  }
+  return messages;
+}
+
 function compareScheduleEntries(a, b) {
-  var aDate = String(a.start_date || '9999-12-31');
-  var bDate = String(b.start_date || '9999-12-31');
+  var aDate = scheduleDateKey_(a.start_date) || '9999-12-31';
+  var bDate = scheduleDateKey_(b.start_date) || '9999-12-31';
   if (aDate !== bDate) return aDate < bDate ? -1 : 1;
   return new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime();
 }
@@ -333,6 +397,8 @@ if (typeof module !== 'undefined' && module.exports) {
     sheetSafeValue_: sheetSafeValue_,
     buildScheduleEntry: buildScheduleEntry,
     scheduleDetails_: scheduleDetails_,
+    scheduleDateKey_: scheduleDateKey_,
+    scheduleConflictMessages: scheduleConflictMessages,
     compareScheduleEntries: compareScheduleEntries,
     checkSuspicious: checkSuspicious,
     isValidEmail: isValidEmail,

@@ -21,13 +21,21 @@ var SHEET_STAY = '住宿申請';
 var SHEET_WORK = '換宿申請';
 var SHEET_SERVICES = '其他服務申請';
 var SHEET_SCHEDULE = '排程總覽';
+var SHEET_DASHBOARD = '管理總覽';
 var SHEET_ERRORS = 'errors';
+
+var OWNER_VISIBLE_SHEETS = [SHEET_DASHBOARD, SHEET_SCHEDULE];
+var INTERNAL_STORAGE_SHEETS = [
+  SHEET_SETTINGS, SHEET_ROOMS, SHEET_WORK_ROOMS, SHEET_LISTS,
+  SHEET_STAY, SHEET_WORK, SHEET_SERVICES, SHEET_ERRORS
+];
 
 var SCHEDULE_COLUMNS = [
   ['id', '申請編號'], ['submitted_at', '申請時間'], ['start_date', '服務日期'], ['end_date', '結束日期'],
-  ['type', '申請類型'], ['items', '申請項目'], ['applicant', '申請人'], ['email', 'Email'],
-  ['phone', '聯絡電話'], ['vehicle_plate', '車牌號碼'], ['details', '詳細內容'], ['photo_url', '本人照片'],
-  ['status', '狀態'], ['flag', '資料檢查']
+  ['type', '申請類型'], ['items', '申請項目'], ['applicant', '申請人'], ['people_count', '人數'],
+  ['quantity', '數量'], ['email', 'Email'], ['phone', '聯絡電話'], ['vehicle_plate', '車牌號碼'],
+  ['details', '詳細內容'], ['photo_url', '本人照片'], ['status', '狀態'], ['conflict', '排程提醒'],
+  ['flag', '資料檢查']
 ];
 
 /** Settings keys the public content endpoint must never disclose. */
@@ -87,7 +95,9 @@ function readSchedule_(ss) {
     var entry = {};
     SCHEDULE_COLUMNS.forEach(function (field) {
       var value = row[field[1]];
-      entry[field[0]] = field[0] === 'submitted_at' && value instanceof Date ? value.toISOString() : value;
+      if (field[0] === 'submitted_at' && value instanceof Date) entry[field[0]] = value.toISOString();
+      else if (field[0] === 'start_date' || field[0] === 'end_date') entry[field[0]] = scheduleDateKey_(value);
+      else entry[field[0]] = value;
     });
     return entry;
   }).sort(compareScheduleEntries);
@@ -204,6 +214,173 @@ function scheduleRow_(entry) {
   return SCHEDULE_COLUMNS.map(function (field) { return sheetSafeValue_(entry[field[0]]); });
 }
 
+function ensureScheduleHeader_(sheet) {
+  var expected = SCHEDULE_COLUMNS.map(function (field) { return field[1]; });
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(expected);
+    return expected.slice();
+  }
+
+  var header = (sheet.getDataRange().getValues()[0] || []).map(function (label) { return String(label || '').trim(); });
+  var missing = expected.filter(function (label) { return header.indexOf(label) < 0; });
+  if (missing.length) {
+    sheet.getRange(1, header.length + 1, 1, missing.length).setValues([missing]);
+    header = header.concat(missing);
+  }
+  return header;
+}
+
+function scheduleRowForHeader_(entry, header) {
+  var keyByLabel = {};
+  SCHEDULE_COLUMNS.forEach(function (field) { keyByLabel[field[1]] = field[0]; });
+  return header.map(function (label) {
+    var key = keyByLabel[String(label || '').trim()];
+    return key ? sheetSafeValue_(entry[key]) : '';
+  });
+}
+
+function scheduleEntriesForRows_(rows, header) {
+  var indexByLabel = {};
+  header.forEach(function (label, index) { indexByLabel[String(label || '').trim()] = index; });
+  return rows.map(function (row) {
+    var entry = {};
+    SCHEDULE_COLUMNS.forEach(function (field) { entry[field[0]] = row[indexByLabel[field[1]]]; });
+    return entry;
+  });
+}
+
+function sortScheduleSheet_(sheet, header) {
+  if (sheet.getLastRow() < 3) return;
+  var rows = sheet.getDataRange().getValues().slice(1);
+  var entries = scheduleEntriesForRows_(rows, header).map(function (entry, index) {
+    entry._sort_key = String(entry.id || '') + ':' + index;
+    entry._original_index = index;
+    return entry;
+  });
+  var desired = entries.slice().sort(function (a, b) {
+    return compareScheduleEntries(a, b) || a._original_index - b._original_index;
+  });
+  var currentKeys = entries.map(function (entry) { return entry._sort_key; });
+
+  desired.forEach(function (entry, targetIndex) {
+    var sourceIndex = currentKeys.indexOf(entry._sort_key);
+    if (sourceIndex === targetIndex) return;
+    sheet.moveRows(sheet.getRange(sourceIndex + 2, 1, 1, 1), targetIndex + 2);
+    currentKeys.splice(sourceIndex, 1);
+    currentKeys.splice(targetIndex, 0, entry._sort_key);
+  });
+}
+
+function refreshScheduleConflicts_(sheet) {
+  if (!sheet || sheet.getLastRow() < 2) return;
+  var values = sheet.getDataRange().getValues();
+  var header = values[0];
+  var indexByLabel = {};
+  header.forEach(function (label, index) { indexByLabel[String(label || '').trim()] = index; });
+  var entries = scheduleEntriesForRows_(values.slice(1), header);
+  var messages = scheduleConflictMessages(entries);
+  var conflictValues = entries.map(function (entry) { return [messages[String(entry.id || '')] || '']; });
+  sheet.getRange(2, indexByLabel['排程提醒'] + 1, conflictValues.length, 1).setValues(conflictValues);
+}
+
+function scheduleColumnLetter_(key, header) {
+  var label = SCHEDULE_COLUMNS.filter(function (field) { return field[0] === key; })[0][1];
+  var labels = header || SCHEDULE_COLUMNS.map(function (field) { return field[1]; });
+  var index = labels.indexOf(label) + 1;
+  var letter = '';
+  while (index > 0) {
+    index--;
+    letter = String.fromCharCode(65 + (index % 26)) + letter;
+    index = Math.floor(index / 26);
+  }
+  return letter;
+}
+
+function buildManagementDashboardRows_(scheduleHeader) {
+  var id = scheduleColumnLetter_('id', scheduleHeader);
+  var type = scheduleColumnLetter_('type', scheduleHeader);
+  var items = scheduleColumnLetter_('items', scheduleHeader);
+  var people = scheduleColumnLetter_('people_count', scheduleHeader);
+  var status = scheduleColumnLetter_('status', scheduleHeader);
+  var schedule = "'" + SHEET_SCHEDULE + "'!";
+  var statusRange = schedule + status + '2:' + status;
+  var typeRange = schedule + type + '2:' + type;
+  var itemRange = schedule + items + '2:' + items;
+  var peopleRange = schedule + people + '2:' + people;
+
+  return [
+    ['彩虹星民宿申請管理總覽', '自動統計'],
+    ['全部申請', '=COUNTA(' + schedule + id + '2:' + id + ')'],
+    ['待處理新申請', '=COUNTIF(' + statusRange + ',"新申請")'],
+    ['已聯絡', '=COUNTIF(' + statusRange + ',"已聯絡")'],
+    ['已確認', '=COUNTIF(' + statusRange + ',"已確認")'],
+    ['已完成', '=COUNTIF(' + statusRange + ',"已完成")'],
+    ['已取消', '=COUNTIF(' + statusRange + ',"已取消")'],
+    ['', ''],
+    ['住宿申請總數', '=COUNTIF(' + typeRange + ',"住宿申請")'],
+    ['已確認住宿組數', '=COUNTIFS(' + typeRange + ',"住宿申請",' + statusRange + ',"已確認")'],
+    ['已確認住宿人數', '=SUMIFS(' + peopleRange + ',' + typeRange + ',"住宿申請",' + statusRange + ',"已確認")'],
+    ['換宿申請總數', '=COUNTIF(' + typeRange + ',"換宿申請")'],
+    ['已確認換宿人數', '=SUMIFS(' + peopleRange + ',' + typeRange + ',"換宿申請",' + statusRange + ',"已確認")'],
+    ['其他服務申請總數', '=COUNTIF(' + typeRange + ',"其他服務")'],
+    ['', ''],
+    ['寄放行李申請', '=COUNTIFS(' + itemRange + ',"*寄放行李*",' + statusRange + ',"<>已取消")'],
+    ['寄放車輛申請', '=COUNTIFS(' + itemRange + ',"*寄放車輛*",' + statusRange + ',"<>已取消")'],
+    ['接機申請', '=COUNTIFS(' + itemRange + ',"*接機*",' + statusRange + ',"<>已取消")'],
+    ['送機申請', '=COUNTIFS(' + itemRange + ',"*送機*",' + statusRange + ',"<>已取消")'],
+    ['市區接送申請', '=COUNTIFS(' + itemRange + ',"*市區接送*",' + statusRange + ',"<>已取消")'],
+    ['', ''],
+    ['使用說明', '「已確認」才算正式預約；本頁會自動更新，請勿刪除公式。']
+  ];
+}
+
+function ensureManagementDashboard_(ss) {
+  var sheet = ss.getSheetByName(SHEET_DASHBOARD);
+  var created = !sheet;
+  if (!sheet) sheet = ss.insertSheet(SHEET_DASHBOARD);
+  var scheduleSheet = ss.getSheetByName(SHEET_SCHEDULE);
+  var scheduleHeader = scheduleSheet && scheduleSheet.getLastRow() ? scheduleSheet.getDataRange().getValues()[0] : null;
+  var rows = buildManagementDashboardRows_(scheduleHeader);
+  if (sheet.clearContents) sheet.clearContents();
+  else sheet.clear();
+  sheet.getRange(1, 1, rows.length, 2).setValues(rows);
+
+  if (sheet.setFrozenRows) sheet.setFrozenRows(1);
+  if (sheet.setColumnWidth) {
+    sheet.setColumnWidth(1, 210);
+    sheet.setColumnWidth(2, 420);
+  }
+  if (sheet.setTabColor) sheet.setTabColor('#2f8f57');
+  var header = sheet.getRange(1, 1, 1, 2);
+  if (header.setFontWeight) header.setFontWeight('bold');
+  if (header.setBackground) header.setBackground('#2f8f57');
+  if (header.setFontColor) header.setFontColor('#ffffff');
+  if (created && ss.setActiveSheet && ss.moveActiveSheet) {
+    ss.setActiveSheet(sheet);
+    ss.moveActiveSheet(1);
+  }
+  return { created: created, rows: rows.length };
+}
+
+function configureOwnerSheetVisibility_(ss) {
+  OWNER_VISIBLE_SHEETS.forEach(function (name) {
+    var sheet = ss.getSheetByName(name);
+    if (sheet && sheet.showSheet) sheet.showSheet();
+  });
+  INTERNAL_STORAGE_SHEETS.forEach(function (name) {
+    var sheet = ss.getSheetByName(name);
+    if (sheet && sheet.hideSheet) sheet.hideSheet();
+  });
+}
+
+function configureOwnerSheetVisibilityBestEffort_(ss) {
+  try {
+    configureOwnerSheetVisibility_(ss);
+  } catch (visibilityError) {
+    // Visibility is only an owner convenience; the next admin login retries it.
+  }
+}
+
 /** Prevents concurrent web-app submissions or admin edits from overwriting sheet rewrites. */
 function withDataLock_(callback) {
   if (typeof LockService === 'undefined') return callback();
@@ -223,33 +400,84 @@ function withDataLock_(callback) {
 function appendSchedule_(ss, entry) {
   return withDataLock_(function () {
     var sheet = ss.getSheetByName(SHEET_SCHEDULE) || ss.insertSheet(SHEET_SCHEDULE);
-    var header = SCHEDULE_COLUMNS.map(function (field) { return field[1]; });
-    var actualHeader = ensureHeader_(sheet, header);
+    var actualHeader = ensureScheduleHeader_(sheet);
     var existingValues = sheet.getDataRange().getValues();
     var idColumn = actualHeader.indexOf('申請編號');
     if (idColumn >= 0 && existingValues.slice(1).some(function (row) {
       return String(row[idColumn]) === String(entry.id);
     })) return false;
-    var newRow = scheduleRow_(entry);
-    while (newRow.length < actualHeader.length) newRow.push('');
-    sheet.appendRow(newRow);
-
-    var values = sheet.getDataRange().getValues();
-    var indexByLabel = {};
-    actualHeader.forEach(function (label, index) { indexByLabel[label] = index; });
-    var rows = values.slice(1).sort(function (a, b) {
-      function entryFor(row) {
-        var out = {};
-        SCHEDULE_COLUMNS.forEach(function (field) { out[field[0]] = row[indexByLabel[field[1]]]; });
-        return out;
-      }
-      return compareScheduleEntries(entryFor(a), entryFor(b));
-    });
-    var table = [actualHeader].concat(rows);
-    sheet.clear();
-    sheet.getRange(1, 1, table.length, actualHeader.length).setValues(table);
+    sheet.appendRow(scheduleRowForHeader_(entry, actualHeader));
+    sortScheduleSheet_(sheet, actualHeader);
+    refreshScheduleConflicts_(sheet);
+    ensureManagementDashboard_(ss);
     return true;
   });
+}
+
+function reconcileScheduleFromResponses_(ss, scheduleSheet, scheduleHeader) {
+  var existingRowsById = {};
+  var scheduleValues = scheduleSheet.getDataRange().getValues();
+  var scheduleIdColumn = scheduleHeader.indexOf('申請編號');
+  scheduleValues.slice(1).forEach(function (row, index) {
+    existingRowsById[String(row[scheduleIdColumn] || '')] = { row: row, rowNumber: index + 2 };
+  });
+
+  var sources = [
+    { sheet: SHEET_STAY, type: 'accommodation', fields: ACCOM_FIELDS },
+    { sheet: SHEET_WORK, type: 'workexchange', fields: WORK_FIELDS },
+    { sheet: SHEET_SERVICES, type: 'services', fields: SERVICE_FIELDS }
+  ];
+  var added = 0;
+
+  sources.forEach(function (source) {
+    var responseSheet = ss.getSheetByName(source.sheet);
+    if (!responseSheet || responseSheet.getLastRow() < 2) return;
+    var values = responseSheet.getDataRange().getValues();
+    var header = values[0].map(function (label) { return String(label || '').trim(); });
+    var indexByLabel = {};
+    header.forEach(function (label, index) { indexByLabel[label] = index; });
+    var labelByKey = {};
+    source.fields.forEach(function (field) { labelByKey[field[0]] = field[1]; });
+
+    values.slice(1).forEach(function (row) {
+      var get = function (key) {
+        var column = indexByLabel[labelByKey[key]];
+        return column === undefined ? '' : row[column];
+      };
+      var applicationId = String(get('application_id') || '').trim();
+      if (!applicationId) return;
+      var timestampColumn = indexByLabel['時間'];
+      var flagColumn = indexByLabel['資料檢查'];
+      var entry = buildScheduleEntry(
+        source.type,
+        get,
+        timestampColumn === undefined ? '' : row[timestampColumn],
+        flagColumn === undefined ? '' : row[flagColumn],
+        applicationId
+      );
+      var existing = existingRowsById[applicationId];
+      if (existing) {
+        [
+          { label: '人數', key: 'people_count' },
+          { label: '數量', key: 'quantity' }
+        ].forEach(function (metric) {
+          var column = scheduleHeader.indexOf(metric.label);
+          if (column < 0 || existing.row[column] !== '' || entry[metric.key] === '') return;
+          scheduleSheet.getRange(existing.rowNumber, column + 1, 1, 1).setValue(entry[metric.key]);
+          existing.row[column] = entry[metric.key];
+        });
+        return;
+      }
+      var scheduleRow = scheduleRowForHeader_(entry, scheduleHeader);
+      scheduleSheet.appendRow(scheduleRow);
+      existingRowsById[applicationId] = { row: scheduleRow, rowNumber: scheduleSheet.getLastRow() };
+      added++;
+    });
+  });
+
+  sortScheduleSheet_(scheduleSheet, scheduleHeader);
+  refreshScheduleConflicts_(scheduleSheet);
+  return added;
 }
 
 function appendScheduleBestEffort_(ss, entry) {
@@ -343,6 +571,7 @@ function handlePost_(ss, e, timestamp) {
     var existingResponse = readResponseApplication_(ss, sheetName, fields, overrides.application_id);
     if (existingResponse) {
       appendScheduleBestEffort_(ss, scheduleFromStoredResponse_(existingResponse));
+      configureOwnerSheetVisibilityBestEffort_(ss);
       return { ok: true, message: '申請已送出 / Application received', duplicate: true };
     }
 
@@ -357,12 +586,18 @@ function handlePost_(ss, e, timestamp) {
       appendScheduleBestEffort_(ss, scheduleFromStoredResponse_(
         readResponseApplication_(ss, sheetName, fields, overrides.application_id)
       ));
+      configureOwnerSheetVisibilityBestEffort_(ss);
       return { ok: true, message: '申請已送出 / Application received', duplicate: true };
     }
 
     // The response row is the durable source of truth. A temporary schedule-sort
     // error is logged but must not tell the visitor to retry and duplicate it.
     appendScheduleBestEffort_(ss, scheduleEntry);
+
+    // Keep technical storage available to the web app without crowding the
+    // owner's everyday spreadsheet view. This is best effort only; visibility
+    // must never affect whether an application is accepted.
+    configureOwnerSheetVisibilityBestEffort_(ss);
 
     // Email is best effort. A quota error must never lose the recorded row.
     try {
@@ -631,7 +866,15 @@ function writeLists_(ss, lists) {
 
 function loadAdminContent(token) {
   assertAuthorized_(token);
-  return buildContentPayload_(SpreadsheetApp.getActiveSpreadsheet(), true);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  return withDataLock_(function () {
+    var scheduleSheet = ss.getSheetByName(SHEET_SCHEDULE) || ss.insertSheet(SHEET_SCHEDULE);
+    var scheduleHeader = ensureScheduleHeader_(scheduleSheet);
+    reconcileScheduleFromResponses_(ss, scheduleSheet, scheduleHeader);
+    ensureManagementDashboard_(ss);
+    configureOwnerSheetVisibility_(ss);
+    return buildContentPayload_(ss, true);
+  });
 }
 
 function saveContent(token, payload) {
@@ -645,7 +888,7 @@ function saveContent(token, payload) {
   return { ok: true };
 }
 
-var SCHEDULE_STATUSES = ['新申請', '已聯絡', '已確認', '已取消'];
+var SCHEDULE_STATUSES = ['新申請', '已聯絡', '已確認', '已完成', '已取消'];
 
 function updateScheduleStatus(token, applicationId, status) {
   assertAuthorized_(token);
@@ -662,7 +905,9 @@ function updateScheduleStatus(token, applicationId, status) {
     for (var i = 1; i < values.length; i++) {
       if (String(values[i][idColumn]) === String(applicationId)) {
         sheet.getRange(i + 1, statusColumn + 1, 1, 1).setValue(status);
-        return { ok: true, id: applicationId, status: status };
+        refreshScheduleConflicts_(sheet);
+        ensureManagementDashboard_(ss);
+        return { ok: true, id: applicationId, status: status, schedule: readSchedule_(ss) };
       }
     }
     throw new Error('找不到申請 Application not found');
@@ -892,6 +1137,7 @@ if (typeof module !== 'undefined' && module.exports) {
     SHEET_WORK: SHEET_WORK,
     SHEET_SERVICES: SHEET_SERVICES,
     SHEET_SCHEDULE: SHEET_SCHEDULE,
+    SHEET_DASHBOARD: SHEET_DASHBOARD,
     SHEET_ERRORS: SHEET_ERRORS,
     PRIVATE_SETTINGS_KEYS: PRIVATE_SETTINGS_KEYS,
     ROOM_COLUMNS: ROOM_COLUMNS,
@@ -911,6 +1157,10 @@ if (typeof module !== 'undefined' && module.exports) {
     readResponseApplication_: readResponseApplication_,
     withDataLock_: withDataLock_,
     appendSchedule_: appendSchedule_,
+    refreshScheduleConflicts_: refreshScheduleConflicts_,
+    buildManagementDashboardRows_: buildManagementDashboardRows_,
+    ensureManagementDashboard_: ensureManagementDashboard_,
+    configureOwnerSheetVisibility_: configureOwnerSheetVisibility_,
     sendNotifyEmail_: sendNotifyEmail_,
     logError_: logError_,
     handlePost_: handlePost_,
