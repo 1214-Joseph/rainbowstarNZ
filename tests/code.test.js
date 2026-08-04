@@ -55,6 +55,19 @@ test('readRooms_ returns an empty array when the tab is missing or holds only a 
   assert.deepEqual(code.readRooms_(fakeSpreadsheet({ rooms: fakeSheet([['name']]) })), []);
 });
 
+test('readWorkRooms_ reads the separate work-exchange accommodation tab', () => {
+  const ss = fakeSpreadsheet({
+    work_rooms: fakeSheet([
+      ['name', 'name_en', 'description', 'description_en', 'photos'],
+      ['花園小屋', 'Garden cabin', '換宿夥伴住宿空間', 'Work-exchange lodging', 'cabin.jpg']
+    ])
+  });
+  assert.deepEqual(code.readWorkRooms_(ss), [{
+    name: '花園小屋', name_en: 'Garden cabin', description: '換宿夥伴住宿空間',
+    description_en: 'Work-exchange lodging', photos: 'cabin.jpg'
+  }]);
+});
+
 test('readListRows_ maps the workexchange_lists tab onto its header', () => {
   const ss = fakeSpreadsheet({
     workexchange_lists: fakeSheet([
@@ -71,6 +84,7 @@ test('buildContentPayload_ assembles settings, rooms and the three lists', () =>
   const ss = fakeSpreadsheet({
     settings: fakeSheet([['key', 'value'], ['site_name', 'Rainbowstar']]),
     rooms: fakeSheet([['name', 'price'], ['主屋', 35]]),
+    work_rooms: fakeSheet([['name', 'photos'], ['花園小屋', 'cabin.jpg']]),
     workexchange_lists: fakeSheet([
       ['list', 'order', 'text_zh', 'text_en'],
       ['duties_out', 1, '餵貓', 'Feed the cats'],
@@ -82,6 +96,7 @@ test('buildContentPayload_ assembles settings, rooms and the three lists', () =>
   assert.equal(payload.ok, true);
   assert.deepEqual(payload.settings, { site_name: 'Rainbowstar' });
   assert.deepEqual(payload.rooms, [{ name: '主屋', price: 35 }]);
+  assert.deepEqual(payload.work_rooms, [{ name: '花園小屋', photos: 'cabin.jpg' }]);
   assert.deepEqual(payload.rules, [{ zh: '第一條', en: 'Rule one' }, { zh: '第二條', en: 'Rule two' }]);
   assert.deepEqual(payload.duties_out, [{ zh: '餵貓', en: 'Feed the cats' }]);
   assert.deepEqual(payload.duties_in, []);
@@ -91,6 +106,7 @@ test('buildContentPayload_ still succeeds when every content tab is missing', ()
   const payload = code.buildContentPayload_(fakeSpreadsheet({}));
   assert.equal(payload.ok, true);
   assert.deepEqual(payload.rooms, []);
+  assert.deepEqual(payload.work_rooms, []);
   assert.deepEqual(payload.rules, []);
 });
 
@@ -151,7 +167,7 @@ test('appendResponse_ creates the tab and writes the header before the first row
   assert.deepEqual(sheet.rows[1], [STAMP, 'A', 'B', '']);
 });
 
-test('appendResponse_ repairs a drifted header instead of writing under stale labels', () => {
+test('appendResponse_ migrates existing rows by label before adding fields or changing their order', () => {
   const ss = fakeWritableSpreadsheet({
     住宿申請: fakeWritableSheet([['時間', '乙', '甲', '資料檢查'], [STAMP, 'old', 'row', '']])
   });
@@ -160,7 +176,24 @@ test('appendResponse_ repairs a drifted header instead of writing under stale la
 
   const sheet = ss.getSheetByName('住宿申請');
   assert.deepEqual(sheet.rows[0], ['時間', '甲', '乙', '資料檢查'], 'header rewritten');
+  assert.deepEqual(sheet.rows[1], [STAMP, 'row', 'old', ''], 'old row migrated under matching labels');
   assert.deepEqual(sheet.rows[2], [STAMP, 'A', 'B', ''], 'new row appended in the new order');
+});
+
+test('appendResponse_ preserves removed historical columns when the active schema changes', () => {
+  const ss = fakeWritableSpreadsheet({
+    住宿申請: fakeWritableSheet([
+      ['時間', '甲', '舊加購項目', '資料檢查'],
+      [STAMP, 'old name', '早餐', '']
+    ])
+  });
+
+  code.appendResponse_(ss, '住宿申請', [['a', '甲']], () => 'new name', STAMP, '');
+
+  const rows = ss.getSheetByName('住宿申請').rows;
+  assert.deepEqual(rows[0], ['時間', '甲', '資料檢查', '舊加購項目']);
+  assert.deepEqual(rows[1], [STAMP, 'old name', '', '早餐']);
+  assert.deepEqual(rows[2], [STAMP, 'new name', '', '']);
 });
 
 test('appendResponse_ leaves a correct header untouched', () => {
@@ -179,15 +212,20 @@ test('handlePost_ writes an accommodation row and reports success', () => {
   global.MailApp = { sendEmail: (to, subject, body, opts) => sent.push({ to, subject, body, opts }) };
 
   const result = code.handlePost_(ss, {
-    parameter: { type: 'accommodation', name_zh: '王美', email: 'mei@example.com', phone: '0211234567' },
-    parameters: { addons: ['M1 加購早餐 NZD$10', 'M2 加購午餐 NZD$12'] }
+    parameter: {
+      type: 'accommodation', name_zh: '王美', email: 'mei@example.com', phone: '0211234567',
+      emergency_name: '王媽媽', emergency_phone: '0912345678', vehicle_plate: 'ABC123'
+    },
+    parameters: {}
   }, STAMP);
 
   assert.equal(result.ok, true);
   const rows = ss.getSheetByName('住宿申請').rows;
   assert.deepEqual(rows[0], code.__lib.buildHeaderRow(code.__lib.ACCOM_FIELDS));
-  const addonsColumn = code.__lib.ACCOM_FIELDS.findIndex((f) => f[0] === 'addons') + 1;
-  assert.equal(rows[1][addonsColumn], 'M1 加購早餐 NZD$10 / M2 加購午餐 NZD$12');
+  const emergencyColumn = code.__lib.ACCOM_FIELDS.findIndex((f) => f[0] === 'emergency_name') + 1;
+  const plateColumn = code.__lib.ACCOM_FIELDS.findIndex((f) => f[0] === 'vehicle_plate') + 1;
+  assert.equal(rows[1][emergencyColumn], '王媽媽');
+  assert.equal(rows[1][plateColumn], 'ABC123');
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'owner@example.com');
   assert.equal(sent[0].opts.replyTo, 'mei@example.com');
@@ -197,15 +235,122 @@ test('handlePost_ routes a work-exchange submission to its own tab', () => {
   const ss = fakeWritableSpreadsheet({});
   global.MailApp = { sendEmail: () => {} };
   global.Session = { getEffectiveUser: () => ({ getEmail: () => 'fallback@example.com' }) };
+  stubScriptProperties({ PHOTO_ROOT_FOLDER_ID: 'ROOT' });
+  stubDrive();
 
   const result = code.handlePost_(ss, {
-    parameter: { type: 'workexchange', name_zh: '王美' },
+    parameter: {
+      type: 'workexchange', name_zh: '王美', photo_base64: 'aGVsbG8=',
+      photo_mime: 'image/jpeg', photo_name: 'mei.jpg'
+    },
     parameters: {}
   }, STAMP);
 
   assert.equal(result.ok, true);
   assert.ok(ss.getSheetByName('換宿申請'));
   assert.equal(ss.getSheetByName('住宿申請'), null);
+  const photoColumn = code.__lib.WORK_FIELDS.findIndex((field) => field[0] === 'photo_url') + 1;
+  assert.equal(ss.getSheetByName('換宿申請').rows[1][photoColumn], 'https://drive.google.com/open?id=FILE1');
+  assert.equal(code.readSchedule_(ss)[0].photo_url, 'https://drive.google.com/open?id=FILE1');
+});
+
+test('handlePost_ rejects a work-exchange application with no required applicant photo', () => {
+  const ss = fakeWritableSpreadsheet({});
+  global.MailApp = { sendEmail: () => {} };
+  global.Session = { getEffectiveUser: () => ({ getEmail: () => 'fallback@example.com' }) };
+
+  const result = code.handlePost_(ss, {
+    parameter: { type: 'workexchange', name_zh: '王美' }, parameters: {}
+  }, STAMP);
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /照片/);
+  assert.equal(ss.getSheetByName('換宿申請'), null);
+});
+
+test('handlePost_ routes a multi-select service request and adds one sorted schedule entry', () => {
+  const ss = fakeWritableSpreadsheet({});
+  global.MailApp = { sendEmail: () => {} };
+  global.Session = { getEffectiveUser: () => ({ getEmail: () => 'fallback@example.com' }) };
+
+  const result = code.handlePost_(ss, {
+    parameter: {
+      type: 'services', name_zh: '王美', email: 'mei@example.com', phone: '0211234567',
+      service_start: '2026-09-10', service_end: '2026-09-17'
+    },
+    parameters: { services: ['寄放行李', '寄放車輛'] }
+  }, STAMP);
+
+  assert.equal(result.ok, true);
+  assert.ok(ss.getSheetByName('其他服務申請'));
+  const schedule = code.readSchedule_(ss);
+  assert.equal(schedule.length, 1);
+  assert.equal(schedule[0].items, '寄放行李 / 寄放車輛');
+  assert.equal(schedule[0].start_date, '2026-09-10');
+  assert.equal(schedule[0].status, '新申請');
+});
+
+test('appendSchedule_ sorts by service date and then preserves first-application priority', () => {
+  const ss = fakeWritableSpreadsheet({});
+  const make = (id, submitted, date) => ({
+    id, submitted_at: new Date(submitted), start_date: date, end_date: date, type: '住宿申請', items: '主屋',
+    applicant: id, email: '', phone: '', vehicle_plate: '', status: '新申請', flag: ''
+  });
+
+  code.appendSchedule_(ss, make('later-submit', '2026-08-02T00:00:00Z', '2026-09-10'));
+  code.appendSchedule_(ss, make('earlier-date', '2026-08-03T00:00:00Z', '2026-09-09'));
+  code.appendSchedule_(ss, make('first-submit', '2026-08-01T00:00:00Z', '2026-09-10'));
+
+  assert.deepEqual(code.readSchedule_(ss).map((row) => row.id), ['earlier-date', 'first-submit', 'later-submit']);
+});
+
+test('appendSchedule_ preserves manually added schedule columns while sorting', () => {
+  const canonicalHeader = code.SCHEDULE_COLUMNS.map((field) => field[1]);
+  const oldData = {
+    id: 'old-id', submitted_at: STAMP, start_date: '2026-09-12', end_date: '2026-09-13', type: '住宿申請',
+    items: '主屋', applicant: '王美', email: '', phone: '', vehicle_plate: '', details: '主屋 2 人', photo_url: '',
+    status: '新申請', flag: ''
+  };
+  const oldRow = code.SCHEDULE_COLUMNS.map((field) => oldData[field[0]] || '').concat(['請電話確認']);
+  const ss = fakeWritableSpreadsheet({
+    排程總覽: fakeWritableSheet([canonicalHeader.concat(['人工備註']), oldRow])
+  });
+  code.appendSchedule_(ss, {
+    id: 'new-id', submitted_at: STAMP, start_date: '2026-09-10', end_date: '2026-09-11',
+    type: '住宿申請', items: '帳棚', applicant: '林明', email: '', phone: '', vehicle_plate: '',
+    details: '帳棚 1 人', photo_url: '', status: '新申請', flag: ''
+  });
+
+  const rows = ss.getSheetByName('排程總覽').rows;
+  assert.deepEqual(rows[0], canonicalHeader.concat(['人工備註']));
+  assert.equal(rows[1][0], 'new-id');
+  assert.equal(rows[2][0], 'old-id');
+  assert.equal(rows[2][rows[2].length - 1], '請電話確認');
+});
+
+test('withDataLock_ serializes web-app sheet rewrites and always releases the script lock', () => {
+  const calls = [];
+  const previousSpreadsheetApp = global.SpreadsheetApp;
+  global.LockService = {
+    getScriptLock: () => ({
+      waitLock: (milliseconds) => calls.push(['wait', milliseconds]),
+      releaseLock: () => calls.push(['release'])
+    })
+  };
+  global.SpreadsheetApp = { flush: () => calls.push(['flush']) };
+
+  try {
+    assert.equal(code.withDataLock_(() => {
+      calls.push(['body']);
+      return 'done';
+    }), 'done');
+  } finally {
+    delete global.LockService;
+    if (previousSpreadsheetApp === undefined) delete global.SpreadsheetApp;
+    else global.SpreadsheetApp = previousSpreadsheetApp;
+  }
+
+  assert.deepEqual(calls, [['wait', 20000], ['body'], ['flush'], ['release']]);
 });
 
 test('handlePost_ never rejects a submission with missing fields', () => {
@@ -216,6 +361,62 @@ test('handlePost_ never rejects a submission with missing fields', () => {
   const result = code.handlePost_(ss, { parameter: {}, parameters: {} }, STAMP);
 
   assert.equal(result.ok, true, 'an empty submission is still recorded');
+  assert.equal(ss.getSheetByName('住宿申請').rows.length, 2);
+});
+
+test('handlePost_ treats the same client application id as one submission', () => {
+  const ss = fakeWritableSpreadsheet({});
+  global.MailApp = { sendEmail: () => {} };
+  global.Session = { getEffectiveUser: () => ({ getEmail: () => 'fallback@example.com' }) };
+  const event = {
+    parameter: { type: 'accommodation', application_id: 'browser-123', name_zh: '王美', checkin: '2026-09-10', checkout: '2026-09-12' },
+    parameters: {}
+  };
+
+  assert.equal(code.handlePost_(ss, event, STAMP).ok, true);
+  assert.equal(code.handlePost_(ss, event, new Date(STAMP.getTime() + 1000)).ok, true);
+
+  assert.equal(ss.getSheetByName('住宿申請').rows.length, 2, 'header plus one response');
+  assert.equal(code.readSchedule_(ss).length, 1, 'one schedule entry');
+});
+
+test('a work-exchange retry rebuilds a missing schedule from the durable response including its private photo', () => {
+  const id = 'workexchange-retry-photo';
+  const fields = code.__lib.WORK_FIELDS;
+  const stored = {
+    application_id: id, name_zh: '王美', start_date: '2026-09-10', end_date: '2026-09-24',
+    photo_url: 'https://drive.google.com/open?id=PRIVATE123'
+  };
+  const get = (key) => stored[key] || '';
+  const ss = fakeWritableSpreadsheet({
+    換宿申請: fakeWritableSheet([
+      code.__lib.buildHeaderRow(fields),
+      code.__lib.buildResponseRow(fields, get, STAMP, '')
+    ])
+  });
+
+  const result = code.handlePost_(ss, {
+    parameter: { type: 'workexchange', application_id: 'retry-photo' }, parameters: {}
+  }, new Date(STAMP.getTime() + 5000));
+
+  assert.equal(result.ok, true);
+  const repaired = code.readSchedule_(ss)[0];
+  assert.equal(repaired.photo_url, 'https://drive.google.com/open?id=PRIVATE123');
+  assert.equal(repaired.submitted_at, STAMP.toISOString());
+});
+
+test('handlePost_ reports success once the response is durable even if schedule sorting fails', () => {
+  const brokenSchedule = fakeWritableSheet([]);
+  brokenSchedule.clear = () => { throw new Error('temporary schedule failure'); };
+  const ss = fakeWritableSpreadsheet({ 排程總覽: brokenSchedule });
+  global.MailApp = { sendEmail: () => {} };
+  global.Session = { getEffectiveUser: () => ({ getEmail: () => 'fallback@example.com' }) };
+
+  const result = code.handlePost_(ss, {
+    parameter: { type: 'accommodation', application_id: 'durable-1', name_zh: '王美' }, parameters: {}
+  }, STAMP);
+
+  assert.equal(result.ok, true);
   assert.equal(ss.getSheetByName('住宿申請').rows.length, 2);
 });
 
@@ -365,9 +566,14 @@ test('a submission with type exactly "workexchange" does not log an error', () =
     settings: fakeWritableSheet([['key', 'value'], ['notify_email', 'owner@example.com']])
   });
   global.MailApp = { sendEmail: () => {} };
+  stubScriptProperties({ PHOTO_ROOT_FOLDER_ID: 'ROOT' });
+  stubDrive();
 
   code.handlePost_(ss, {
-    parameter: { type: 'workexchange', name_zh: '王美' },
+    parameter: {
+      type: 'workexchange', name_zh: '王美',
+      photo_base64: 'aGVsbG8=', photo_mime: 'image/jpeg', photo_name: 'mei.jpg'
+    },
     parameters: {}
   }, STAMP);
 
@@ -468,8 +674,11 @@ test('photoUrlFor_ builds a Google CDN link and fileIdFromUrl_ reverses it', () 
   assert.equal(code.fileIdFromUrl_(url), 'FILE123');
 });
 
-test('fileIdFromUrl_ also reads the proxy form and returns null for anything else', () => {
+test('fileIdFromUrl_ reads proxy and private Drive forms and rejects unsafe ids', () => {
   assert.equal(code.fileIdFromUrl_('https://script.google.com/macros/s/AKfy/exec?img=FILE123'), 'FILE123');
+  assert.equal(code.fileIdFromUrl_('https://drive.google.com/open?id=PRIVATE_123-abc'), 'PRIVATE_123-abc');
+  assert.equal(code.fileIdFromUrl_('https://drive.google.com/open?usp=sharing&id=PRIVATE123'), 'PRIVATE123');
+  assert.equal(code.fileIdFromUrl_('https://drive.google.com/open?id=..%2Fsecret'), null);
   assert.equal(code.fileIdFromUrl_('https://example.com/cat.jpg'), null);
   assert.equal(code.fileIdFromUrl_(''), null);
 });
@@ -724,6 +933,18 @@ test('writeRooms_ rewrites the tab under the canonical column order', () => {
   assert.equal(sheet.rows[1][code.ROOM_COLUMNS.indexOf('note_en')], '', 'absent fields become empty strings');
 });
 
+test('writeWorkRooms_ rewrites only the separate work-exchange room tab', () => {
+  const ss = fakeWritableSpreadsheet({
+    rooms: fakeWritableSheet([['name'], ['一般住宿']]),
+    work_rooms: fakeWritableSheet([['old'], ['value']])
+  });
+  code.writeWorkRooms_(ss, [{ name: '花園小屋', name_en: 'Garden cabin', description: '安靜空間', photos: 'a.jpg' }]);
+
+  assert.deepEqual(ss.getSheetByName('work_rooms').rows[0], code.WORK_ROOM_COLUMNS);
+  assert.equal(code.readWorkRooms_(ss)[0].name, '花園小屋');
+  assert.equal(code.readRooms_(ss)[0].name, '一般住宿');
+});
+
 test('writeLists_ rewrites all three lists with orders renumbered from one', () => {
   const ss = fakeWritableSpreadsheet({});
   code.writeLists_(ss, {
@@ -745,6 +966,7 @@ test('loadAdminContent and saveContent and saveList all refuse an invalid token'
   assert.throws(() => code.loadAdminContent('bad'), /未授權/);
   assert.throws(() => code.saveContent('bad', { settings: {}, rooms: [] }), /未授權/);
   assert.throws(() => code.saveList('bad', 'rules', []), /未授權/);
+  assert.throws(() => code.updateScheduleStatus('bad', 'app-1', '已確認'), /未授權/);
 });
 
 test('saveContent writes settings and rooms, then loadAdminContent reads them back', () => {
@@ -754,13 +976,51 @@ test('saveContent writes settings and rooms, then loadAdminContent reads them ba
 
   code.saveContent(token, {
     settings: { site_name: 'Rainbowstar', tagline: '標語' },
-    rooms: [{ name: '主屋', price: 35, photos: '' }]
+    rooms: [{ name: '主屋', price: 35, photos: '' }],
+    work_rooms: [{ name: '花園小屋', description: '換宿空間', photos: '' }]
   });
 
   const loaded = code.loadAdminContent(token);
   assert.equal(loaded.ok, true);
   assert.equal(loaded.settings.site_name, 'Rainbowstar');
   assert.equal(loaded.rooms[0].name, '主屋');
+  assert.equal(loaded.work_rooms[0].name, '花園小屋');
+});
+
+test('loadAdminContent includes the private schedule while the public payload does not', () => {
+  const token = authorizedToken();
+  const scheduleData = { id: 'app-1', submitted_at: STAMP, start_date: '2026-09-10', end_date: '2026-09-12', type: '住宿申請', items: '主屋', applicant: '王美', email: 'mei@example.com', phone: '0211', status: '新申請' };
+  const ss = fakeWritableSpreadsheet({
+    排程總覽: fakeWritableSheet([
+      code.SCHEDULE_COLUMNS.map((field) => field[1]),
+      code.SCHEDULE_COLUMNS.map((field) => scheduleData[field[0]] || '')
+    ])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+
+  assert.equal(code.buildContentPayload_(ss).schedule, undefined);
+  const schedule = code.loadAdminContent(token).schedule;
+  assert.equal(schedule[0].id, 'app-1');
+  assert.equal(schedule[0].submitted_at, '2026-07-09T12:00:00.000Z', 'google.script.run receives a serializable string');
+});
+
+test('updateScheduleStatus changes only the named application', () => {
+  const token = authorizedToken();
+  const header = code.SCHEDULE_COLUMNS.map((field) => field[1]);
+  function scheduleRow(data) { return code.SCHEDULE_COLUMNS.map((field) => data[field[0]] || ''); }
+  const ss = fakeWritableSpreadsheet({
+    排程總覽: fakeWritableSheet([
+      header,
+      scheduleRow({ id: 'app-1', submitted_at: STAMP, start_date: '2026-09-10', end_date: '2026-09-12', type: '住宿申請', items: '主屋', applicant: '王美', status: '新申請' }),
+      scheduleRow({ id: 'app-2', submitted_at: STAMP, start_date: '2026-09-11', end_date: '2026-09-13', type: '換宿申請', items: '打工換宿', applicant: 'John', status: '新申請' })
+    ])
+  });
+  global.SpreadsheetApp = { getActiveSpreadsheet: () => ss };
+
+  const result = code.updateScheduleStatus(token, 'app-2', '已確認');
+  assert.equal(result.ok, true);
+  assert.deepEqual(code.readSchedule_(ss).map((row) => row.status), ['新申請', '已確認']);
+  assert.throws(() => code.updateScheduleStatus(token, 'app-1', '亂填狀態'), /未知的狀態/);
 });
 
 test('saveList replaces only the named list and leaves the other two intact', () => {
@@ -928,6 +1188,17 @@ test('readPhotoUrls_ reads a room photo list by row index', () => {
   assert.deepEqual(code.readPhotoUrls_(ss, 'room-1'), ['y.jpg', 'z.jpg']);
 });
 
+test('readPhotoUrls_ and writePhotoUrls_ use the separate work-room collection', () => {
+  const ss = fakeWritableSpreadsheet({
+    rooms: fakeWritableSheet([['name', 'photos'], ['一般住宿', 'stay.jpg']]),
+    work_rooms: fakeWritableSheet([['name', 'photos'], ['花園小屋', 'old.jpg']])
+  });
+  assert.deepEqual(code.readPhotoUrls_(ss, 'work-room-0'), ['old.jpg']);
+  code.writePhotoUrls_(ss, 'work-room-0', ['new.jpg']);
+  assert.deepEqual(code.readPhotoUrls_(ss, 'work-room-0'), ['new.jpg']);
+  assert.deepEqual(code.readPhotoUrls_(ss, 'room-0'), ['stay.jpg']);
+});
+
 test('readPhotoUrls_ returns an empty array for an out-of-range room', () => {
   const ss = fakeWritableSpreadsheet({ rooms: fakeWritableSheet([['name', 'photos']]) });
   assert.deepEqual(code.readPhotoUrls_(ss, 'room-9'), []);
@@ -953,6 +1224,7 @@ function stubDrive() {
   const created = [];
   const subfolders = new Map();
   const trashed = [];
+  const shared = [];
 
   const makeFolder = (id, name) => ({
     getId: () => id,
@@ -970,7 +1242,7 @@ function stubDrive() {
       const fileId = 'FILE' + (created.length + 1);
       const file = {
         getId: () => fileId,
-        setSharing: () => file,
+        setSharing: () => { shared.push(fileId); return file; },
         setTrashed: (v) => trashed.push(file.getId()) && file
       };
       created.push({ blob, file });
@@ -996,8 +1268,33 @@ function stubDrive() {
     base64Decode: (s) => Buffer.from(s, 'base64'),
     newBlob: (bytes, mimeType, name) => ({ bytes, mimeType, name, setName: () => {} })
   });
-  return { created, trashed };
+  return { created, trashed, shared };
 }
+
+test('storeApplicantPhoto_ keeps applicant photos private and returns an owner-only Drive link', () => {
+  stubScriptProperties({ PHOTO_ROOT_FOLDER_ID: 'ROOT' });
+  const drive = stubDrive();
+
+  const url = code.storeApplicantPhoto_({
+    photo_base64: 'aGVsbG8=', photo_mime: 'image/jpeg', photo_name: 'mei.jpg'
+  });
+
+  assert.equal(url, 'https://drive.google.com/open?id=FILE1');
+  assert.equal(drive.created.length, 1);
+  assert.deepEqual(drive.shared, [], 'applicant photo was not shared publicly');
+});
+
+test('storeApplicantPhoto_ rejects a missing, oversized, or non-image payload before creating a Drive file', () => {
+  stubScriptProperties({ PHOTO_ROOT_FOLDER_ID: 'ROOT' });
+  const drive = stubDrive();
+
+  assert.throws(() => code.storeApplicantPhoto_({}), /照片/);
+  assert.throws(() => code.storeApplicantPhoto_({ photo_base64: 'abc', photo_mime: 'text/plain' }), /圖片格式/);
+  assert.throws(() => code.storeApplicantPhoto_({
+    photo_base64: 'a'.repeat(code.MAX_APPLICANT_PHOTO_BASE64 + 1), photo_mime: 'image/jpeg'
+  }), /照片過大/);
+  assert.deepEqual(drive.created, []);
+});
 
 test('uploadPhoto appends the new photo URL and returns the whole list', () => {
   const token = authorizedToken();

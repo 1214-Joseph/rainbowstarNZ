@@ -11,6 +11,11 @@
   .sub { color:#9a927f; font-size:13px; margin-bottom:26px; }
   .card { background:#fff; border:1px solid #ece3d3; border-radius:16px; padding:22px; margin-bottom:18px; box-shadow:0 8px 24px rgba(60,50,30,.05); }
   .card h2 { font-size:17px; margin:0 0 16px; color:#1f6b40; }
+  .card summary { cursor:pointer; list-style:none; font-size:17px; font-weight:700; color:#1f6b40; padding-right:28px; position:relative; }
+  .card summary::-webkit-details-marker { display:none; }
+  .card summary::after { content:'＋'; position:absolute; right:0; top:0; color:#8a836f; }
+  .card[open] summary { margin-bottom:16px; }
+  .card[open] summary::after { content:'－'; }
   label { display:block; font-weight:600; font-size:13px; margin:14px 0 6px; color:#3a382f; }
   input[type=text], input[type=email], textarea {
     width:100%; padding:10px 12px; border:1.5px solid #e4dccb; border-radius:10px;
@@ -30,6 +35,14 @@
   .msg.err { display:block; background:#fdece7; color:#b3401f; border:1px solid #f3c6b7; }
   .bar { position:sticky; bottom:0; background:rgba(253,251,246,.94); border-top:1px solid #ece3d3; padding:14px 20px; display:flex; gap:12px; justify-content:flex-end; }
   #login { max-width:380px; margin:14vh auto; }
+  .schedule-wrap { overflow:auto; margin-top:12px; }
+  .schedule-table { width:100%; min-width:850px; border-collapse:collapse; font-size:13px; }
+  .schedule-table th { text-align:left; color:#6b6558; background:#f7f2e8; padding:9px 10px; border-bottom:1px solid #e4dccb; white-space:nowrap; }
+  .schedule-table td { padding:10px; border-bottom:1px solid #eee7d9; vertical-align:top; }
+  .schedule-table select { padding:7px 9px; border:1px solid #d8cdb8; border-radius:9px; background:#fff; }
+  .schedule-type { display:inline-block; padding:3px 8px; border-radius:999px; background:#e7f4ec; color:#1f6b40; white-space:nowrap; }
+  .visibility-control { display:flex; align-items:center; gap:10px; margin:0 0 18px; padding:12px 14px; border-radius:12px; background:#eef7f1; color:#1f6b40; }
+  .visibility-control input { width:20px; height:20px; accent-color:#2f8f57; }
 </style>
 </head>
 <body>
@@ -137,23 +150,93 @@
       { key: 'notify_email', label: '收表單通知信的信箱', translatable: false },
       { key: 'location_text', label: '地點' }
     ] },
-    { title: '首頁', photos: 'hero', keys: [
-      { key: 'tagline', label: '首頁標語', multiline: true }
+    { title: '首頁主視覺', visibilityKey: 'show_home', photos: 'hero', keys: [
+      { key: 'hero_eyebrow', label: '上方小標' },
+      { key: 'tagline', label: '首頁標語', multiline: true },
+      { key: 'hero_cta_primary', label: '主要按鈕文字' },
+      { key: 'hero_cta_secondary', label: '次要按鈕文字' },
+      { key: 'hero_badge_location', label: '特色標籤：地點' },
+      { key: 'hero_badge_host', label: '特色標籤：經營者' },
+      { key: 'hero_badge_work', label: '特色標籤：換宿' },
+      { key: 'hero_badge_sky', label: '照片角標' },
+      { key: 'hero_photo_title', label: '尚未上傳照片時的標題' },
+      { key: 'hero_photo_hint', label: '尚未上傳照片時的提示', multiline: true }
     ] },
-    { title: '關於我們', keys: [
+    { title: '關於我們', visibilityKey: 'show_about', keys: [
+      { key: 'about_eyebrow', label: '區塊小標' },
+      { key: 'about_title', label: '區塊標題' },
       { key: 'intro_text', label: '介紹段落', multiline: true },
-      { key: 'feature_1', label: '特色一：舒適住宿', multiline: true },
-      { key: 'feature_2', label: '特色二：打工換宿', multiline: true },
-      { key: 'feature_3', label: '特色三：生活便利', multiline: true }
+      { key: 'feature_1_title', label: '特色一標題' },
+      { key: 'feature_1', label: '特色一內容', multiline: true },
+      { key: 'feature_2_title', label: '特色二標題' },
+      { key: 'feature_2', label: '特色二內容', multiline: true },
+      { key: 'feature_3_title', label: '特色三標題' },
+      { key: 'feature_3', label: '特色三內容', multiline: true }
     ] },
-    { title: '住宿', keys: [
+    { title: '住宿區', visibilityKey: 'show_stay', keys: [
+      { key: 'stay_eyebrow', label: '區塊小標' },
+      { key: 'stay_title', label: '區塊標題' },
       { key: 'accommodation_intro', label: '住宿區介紹', multiline: true },
       { key: 'booking_note', label: '預定注意事項', multiline: true }
     ] },
-    { title: '打工換宿', keys: [
-      { key: 'workexchange_intro', label: '換宿區介紹', multiline: true }
+    { title: '打工換宿區', visibilityKey: 'show_work', keys: [
+      { key: 'work_eyebrow', label: '區塊小標' },
+      { key: 'work_title', label: '區塊標題' },
+      { key: 'workexchange_intro', label: '換宿區介紹', multiline: true },
+      { key: 'work_stat_duration_value', label: '摘要一數值' },
+      { key: 'work_stat_duration_label', label: '摘要一說明' },
+      { key: 'work_stat_hours_value', label: '摘要二數值' },
+      { key: 'work_stat_hours_label', label: '摘要二說明' },
+      { key: 'work_stat_schedule_value', label: '摘要三數值' },
+      { key: 'work_stat_schedule_label', label: '摘要三說明' },
+      { key: 'work_rules_title', label: '章則標題' },
+      { key: 'work_duties_title', label: '工作內容標題' },
+      { key: 'work_duties_intro', label: '工作內容說明', multiline: true },
+      { key: 'work_duties_outdoor_title', label: '戶外工作標題' },
+      { key: 'work_duties_indoor_title', label: '室內工作標題' },
+      { key: 'work_cta_title', label: '換宿申請提示標題' },
+      { key: 'work_cta_text', label: '換宿申請提示內容' },
+      { key: 'work_cta_button', label: '換宿申請按鈕' },
+      { key: 'work_rooms_eyebrow', label: '換宿房間小標' },
+      { key: 'work_rooms_title', label: '換宿房間標題' },
+      { key: 'workexchange_rooms_intro', label: '換宿房間區介紹', multiline: true },
+      { key: 'work_rooms_empty', label: '尚無換宿房間時的提示', multiline: true }
     ] },
-    { title: '周邊景點', keys: [] }
+    { title: '周邊與生活', visibilityKey: 'show_nearby', keys: [
+      { key: 'nearby_eyebrow', label: '區塊小標' },
+      { key: 'nearby_title', label: '區塊標題' },
+      { key: 'nearby_intro', label: '區塊介紹', multiline: true },
+      { key: 'nearby_transport_title', label: '交通卡片標題' },
+      { key: 'nearby_transport_text', label: '交通卡片內容', multiline: true },
+      { key: 'nearby_essentials_title', label: '生活卡片標題' },
+      { key: 'nearby_essentials_text', label: '生活卡片內容', multiline: true },
+      { key: 'nearby_explore_title', label: '探索卡片標題' },
+      { key: 'nearby_explore_text', label: '探索卡片內容', multiline: true },
+      { key: 'nearby_farm_title', label: '農莊卡片標題' },
+      { key: 'nearby_farm_text', label: '農莊卡片內容', multiline: true },
+      { key: 'scenery_heading', label: '照片區標題' },
+      { key: 'scenery1_label', label: '風景照片一名稱' },
+      { key: 'scenery2_label', label: '風景照片二名稱' },
+      { key: 'scenery3_label', label: '風景照片三名稱' }
+    ] },
+    { title: '線上申請區', visibilityKey: 'show_apply', keys: [
+      { key: 'apply_eyebrow', label: '區塊小標' },
+      { key: 'apply_title', label: '區塊標題' },
+      { key: 'apply_intro', label: '區塊介紹', multiline: true },
+      { key: 'stay_form_note', label: '住宿表單說明', multiline: true },
+      { key: 'work_form_note', label: '換宿表單說明', multiline: true },
+      { key: 'services_form_note', label: '其他服務表單說明', multiline: true }
+    ] },
+    { title: '聯絡區', visibilityKey: 'show_contact', keys: [
+      { key: 'contact_eyebrow', label: '區塊小標' },
+      { key: 'contact_title', label: '區塊標題' },
+      { key: 'contact_location_title', label: '地點卡片標題' },
+      { key: 'contact_email_title', label: 'Email 卡片標題' },
+      { key: 'contact_phone_title', label: '電話卡片標題' }
+    ] },
+    { title: '頁尾', keys: [
+      { key: 'footer_note', label: '頁尾說明' }
+    ] }
   ];
 
   var ROOM_FIELDS = [
@@ -208,6 +291,19 @@
     return wrap;
   }
 
+  function renderVisibilityField(key) {
+    var settings = CONTENT.settings || {};
+    var raw = settings[key];
+    var checked = raw === undefined || raw === null || String(raw).trim() === '' ||
+      ['false', '0', 'no', 'off'].indexOf(String(raw).trim().toLowerCase()) < 0;
+    var input = el('input', { type: 'checkbox', id: 'f_' + key });
+    input.checked = checked;
+    var label = el('label', { class: 'visibility-control', for: 'f_' + key });
+    label.appendChild(input);
+    label.appendChild(el('span', { text: '在公開網站顯示這個區塊' }));
+    return label;
+  }
+
   function renderRoomCard(room, index) {
     var card = el('div', { class: 'card', id: 'room_' + index });
     card.appendChild(el('h2', { text: '房型 ' + (index + 1) }));
@@ -255,9 +351,52 @@
     });
   }
 
+  function renderWorkRoomCard(room, index) {
+    var card = el('div', { class: 'card', id: 'work_room_' + index });
+    card.appendChild(el('h2', { text: '換宿房間 ' + (index + 1) }));
+
+    [{ column: 'name', label: '房間名稱' }, { column: 'description', label: '房間簡介', multiline: true }].forEach(function (field) {
+      var row = el('div', { class: 'row' });
+      var zh = el('div', {});
+      zh.appendChild(el('label', { text: field.label + '（中文）' }));
+      zh.appendChild(inputFor(room[field.column], field.multiline, 'wr' + index + '_' + field.column));
+      var en = el('div', {});
+      en.appendChild(el('label', { text: field.label + '（English，可留空）' }));
+      en.appendChild(inputFor(room[field.column + '_en'], field.multiline, 'wr' + index + '_' + field.column + '_en'));
+      row.appendChild(zh);
+      row.appendChild(en);
+      card.appendChild(row);
+    });
+
+    card.appendChild(renderPhotoManager('work-room-' + index, room.photos));
+    var remove = el('button', { class: 'btn btn-danger', type: 'button', text: '刪除這個換宿房間' });
+    remove.style.marginTop = '16px';
+    remove.onclick = function () {
+      CONTENT.work_rooms = collectWorkRooms().filter(function (_, i) { return i !== index; });
+      renderSections();
+    };
+    card.appendChild(remove);
+    return card;
+  }
+
+  function collectWorkRooms() {
+    return (CONTENT.work_rooms || []).map(function (room, index) {
+      return {
+        name: document.getElementById('wr' + index + '_name').value,
+        name_en: document.getElementById('wr' + index + '_name_en').value,
+        description: document.getElementById('wr' + index + '_description').value,
+        description_en: document.getElementById('wr' + index + '_description_en').value,
+        photos: room.photos || ''
+      };
+    });
+  }
+
   function collectPayload() {
     var settings = {};
     SECTIONS.forEach(function (section) {
+      if (section.visibilityKey) {
+        settings[section.visibilityKey] = document.getElementById('f_' + section.visibilityKey).checked ? 'true' : 'false';
+      }
       section.keys.forEach(function (field) {
         settings[field.key] = document.getElementById('f_' + field.key).value;
         if (field.translatable !== false) {
@@ -265,7 +404,7 @@
         }
       });
     });
-    return { settings: settings, rooms: collectRooms() };
+    return { settings: settings, rooms: collectRooms(), work_rooms: collectWorkRooms() };
   }
 
   function saveAll() {
@@ -283,18 +422,92 @@
     });
   }
 
+  function renderSchedule(host) {
+    var card = el('div', { class: 'card' });
+    card.appendChild(el('h2', { text: '申請排程' }));
+    card.appendChild(el('div', { class: 'sub', text: '依服務日期排列；同一天較早送出的人排在前面。狀態可直接在右側更新。' }));
+    var rows = CONTENT.schedule || [];
+    if (!rows.length) {
+      card.appendChild(el('div', { text: '目前沒有申請。' }));
+      host.appendChild(card);
+      return;
+    }
+
+    var wrap = el('div', { class: 'schedule-wrap' });
+    var table = el('table', { class: 'schedule-table' });
+    var head = el('thead', {});
+    var headRow = el('tr', {});
+    ['服務日期', '類型', '項目', '詳細資料', '申請人', '聯絡方式', '車牌', '申請時間', '狀態'].forEach(function (label) {
+      headRow.appendChild(el('th', { text: label }));
+    });
+    head.appendChild(headRow);
+    table.appendChild(head);
+    var body = el('tbody', {});
+
+    rows.forEach(function (row) {
+      var tr = el('tr', {});
+      tr.appendChild(el('td', { text: (row.start_date || '未填') + (row.end_date && row.end_date !== row.start_date ? ' ～ ' + row.end_date : '') }));
+      var typeCell = el('td', {});
+      typeCell.appendChild(el('span', { class: 'schedule-type', text: row.type || '' }));
+      tr.appendChild(typeCell);
+      tr.appendChild(el('td', { text: row.items || '' }));
+      var detailCell = el('td', { text: row.details || '—' });
+      if (row.photo_url) {
+        detailCell.appendChild(document.createElement('br'));
+        detailCell.appendChild(el('a', { href: row.photo_url, target: '_blank', rel: 'noopener noreferrer', text: '查看本人照片' }));
+      }
+      tr.appendChild(detailCell);
+      tr.appendChild(el('td', { text: row.applicant || '' }));
+      tr.appendChild(el('td', { text: [row.phone, row.email].filter(Boolean).join('\n') }));
+      tr.lastChild.style.whiteSpace = 'pre-line';
+      tr.appendChild(el('td', { text: row.vehicle_plate || '—' }));
+      tr.appendChild(el('td', { text: String(row.submitted_at || '').replace('T', ' ').slice(0, 16) }));
+
+      var statusCell = el('td', {});
+      var select = el('select', {});
+      ['新申請', '已聯絡', '已確認', '已取消'].forEach(function (status) {
+        var option = el('option', { value: status, text: status });
+        option.selected = row.status === status;
+        select.appendChild(option);
+      });
+      select.onchange = function () {
+        var nextStatus = select.value;
+        select.disabled = true;
+        runAuth('updateScheduleStatus', row.id, nextStatus).then(function () {
+          row.status = nextStatus;
+          select.disabled = false;
+        }).catch(function (error) {
+          select.value = row.status;
+          select.disabled = false;
+          alert('狀態更新失敗：' + error);
+        });
+      };
+      statusCell.appendChild(select);
+      tr.appendChild(statusCell);
+      body.appendChild(tr);
+    });
+    table.appendChild(body);
+    wrap.appendChild(table);
+    card.appendChild(wrap);
+    host.appendChild(card);
+  }
+
   function renderSections() {
     var host = document.getElementById('sections');
     host.innerHTML = '';
 
+    renderSchedule(host);
+
     SECTIONS.forEach(function (section) {
-      var card = el('div', { class: 'card' });
-      card.appendChild(el('h2', { text: section.title }));
+      var card = el('details', { class: 'card' });
+      card.open = section.title === '基本資訊';
+      card.appendChild(el('summary', { text: section.title }));
+      if (section.visibilityKey) card.appendChild(renderVisibilityField(section.visibilityKey));
       section.keys.forEach(function (field) {
         card.appendChild(renderTextField(field.key, field.label, field));
       });
       if (section.photos) card.appendChild(renderPhotoManager(section.photos, (CONTENT.settings || {})[section.photos + '_photos']));
-      if (section.title === '周邊景點') {
+      if (section.title === '周邊與生活') {
         ['1', '2', '3'].forEach(function (n) {
           card.appendChild(el('label', { text: '景點 ' + n + ' 照片' }));
           card.appendChild(renderPhotoManager('scenery-' + n, (CONTENT.settings || {})['scenery' + n + '_photos']));
@@ -315,6 +528,18 @@
       renderSections();
     };
     host.appendChild(add);
+
+    var workRoomsCard = el('div', { class: 'card' });
+    workRoomsCard.appendChild(el('h2', { text: '換宿住宿空間' }));
+    workRoomsCard.appendChild(el('div', { class: 'sub', text: '這裡的房間只顯示在網站換宿區，不會混進一般住宿房型。' }));
+    host.appendChild(workRoomsCard);
+    (CONTENT.work_rooms || []).forEach(function (room, index) { host.appendChild(renderWorkRoomCard(room, index)); });
+    var addWorkRoom = el('button', { class: 'btn btn-ghost', type: 'button', text: '＋ 新增換宿房間' });
+    addWorkRoom.onclick = function () {
+      CONTENT.work_rooms = collectWorkRooms().concat([{ name: '', name_en: '', description: '', description_en: '', photos: '' }]);
+      renderSections();
+    };
+    host.appendChild(addWorkRoom);
 
     renderListEditors(host);
   }
@@ -365,9 +590,14 @@
   function updatePhotoState(section, urls) {
     var joined = urls.join('\n');
     var roomMatch = section.match(/^room-(\d+)$/);
+    var workRoomMatch = section.match(/^work-room-(\d+)$/);
 
     if (roomMatch) {
       CONTENT.rooms[Number(roomMatch[1])].photos = joined;
+      return;
+    }
+    if (workRoomMatch) {
+      CONTENT.work_rooms[Number(workRoomMatch[1])].photos = joined;
       return;
     }
     var key = section === 'hero' ? 'hero_photos' : 'scenery' + section.split('-')[1] + '_photos';

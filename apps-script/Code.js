@@ -15,10 +15,20 @@
 
 var SHEET_SETTINGS = 'settings';
 var SHEET_ROOMS = 'rooms';
+var SHEET_WORK_ROOMS = 'work_rooms';
 var SHEET_LISTS = 'workexchange_lists';
 var SHEET_STAY = '住宿申請';
 var SHEET_WORK = '換宿申請';
+var SHEET_SERVICES = '其他服務申請';
+var SHEET_SCHEDULE = '排程總覽';
 var SHEET_ERRORS = 'errors';
+
+var SCHEDULE_COLUMNS = [
+  ['id', '申請編號'], ['submitted_at', '申請時間'], ['start_date', '服務日期'], ['end_date', '結束日期'],
+  ['type', '申請類型'], ['items', '申請項目'], ['applicant', '申請人'], ['email', 'Email'],
+  ['phone', '聯絡電話'], ['vehicle_plate', '車牌號碼'], ['details', '詳細內容'], ['photo_url', '本人照片'],
+  ['status', '狀態'], ['flag', '資料檢查']
+];
 
 /** Settings keys the public content endpoint must never disclose. */
 var PRIVATE_SETTINGS_KEYS = ['notify_email'];
@@ -63,8 +73,24 @@ function readRooms_(ss) {
   return readTableRows_(ss, SHEET_ROOMS);
 }
 
+function readWorkRooms_(ss) {
+  return readTableRows_(ss, SHEET_WORK_ROOMS);
+}
+
 function readListRows_(ss) {
   return readTableRows_(ss, SHEET_LISTS);
+}
+
+function readSchedule_(ss) {
+  var rows = readTableRows_(ss, SHEET_SCHEDULE);
+  return rows.map(function (row) {
+    var entry = {};
+    SCHEDULE_COLUMNS.forEach(function (field) {
+      var value = row[field[1]];
+      entry[field[0]] = field[0] === 'submitted_at' && value instanceof Date ? value.toISOString() : value;
+    });
+    return entry;
+  }).sort(compareScheduleEntries);
 }
 
 function buildContentPayload_(ss, includePrivate) {
@@ -82,14 +108,49 @@ function buildContentPayload_(ss, includePrivate) {
   }
 
   var lists = groupLists(readListRows_(ss));
-  return {
+  var payload = {
     ok: true,
     settings: settingsToReturn,
     rooms: readRooms_(ss),
+    work_rooms: readWorkRooms_(ss),
     rules: lists.rules,
     duties_out: lists.duties_out,
     duties_in: lists.duties_in
   };
+  if (includePrivate) payload.schedule = readSchedule_(ss);
+  return payload;
+}
+
+function ensureHeader_(sheet, expectedHeader) {
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(expectedHeader);
+    return expectedHeader.slice();
+  }
+
+  var values = sheet.getDataRange().getValues();
+  var existingHeader = values[0] || [];
+  var expectedLabels = {};
+  expectedHeader.forEach(function (label) { expectedLabels[String(label || '').trim()] = true; });
+  var legacyLabels = existingHeader.filter(function (label) {
+    var normalized = String(label || '').trim();
+    return normalized && !expectedLabels[normalized];
+  });
+  var targetHeader = expectedHeader.concat(legacyLabels);
+  if (!headerNeedsUpdate(existingHeader, targetHeader)) return targetHeader;
+
+  var indexByLabel = {};
+  existingHeader.forEach(function (label, index) { indexByLabel[String(label || '').trim()] = index; });
+  var migrated = [targetHeader.slice()];
+  values.slice(1).forEach(function (row) {
+    migrated.push(targetHeader.map(function (label) {
+      var oldIndex = indexByLabel[label];
+      return oldIndex === undefined ? '' : row[oldIndex];
+    }));
+  });
+
+  sheet.clear();
+  sheet.getRange(1, 1, migrated.length, targetHeader.length).setValues(migrated);
+  return targetHeader;
 }
 
 /**
@@ -98,19 +159,114 @@ function buildContentPayload_(ss, includePrivate) {
  * ACCOM_FIELDS cannot silently misalign every column.
  */
 function appendResponse_(ss, sheetName, fields, get, timestamp, flag) {
-  var sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
-  var expectedHeader = buildHeaderRow(fields);
+  return withDataLock_(function () {
+    var sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
+    var expectedHeader = buildHeaderRow(fields);
+    var actualHeader = ensureHeader_(sheet, expectedHeader);
+    var applicationId = String(get('application_id') || '');
+    var idColumn = actualHeader.indexOf('申請編號');
+    if (applicationId && idColumn >= 0) {
+      var existingRows = sheet.getDataRange().getValues().slice(1);
+      if (existingRows.some(function (existing) { return String(existing[idColumn]) === applicationId; })) return false;
+    }
+    var row = buildResponseRow(fields, get, timestamp, flag);
+    while (row.length < actualHeader.length) row.push('');
+    sheet.appendRow(row);
+    return true;
+  });
+}
 
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(expectedHeader);
-  } else {
-    var existingHeader = sheet.getDataRange().getValues()[0];
-    if (headerNeedsUpdate(existingHeader, expectedHeader)) {
-      sheet.getRange(1, 1, 1, expectedHeader.length).setValues([expectedHeader]);
+function responseApplicationExists_(ss, sheetName, applicationId) {
+  return Boolean(readResponseApplication_(ss, sheetName, [], applicationId));
+}
+
+function readResponseApplication_(ss, sheetName, fields, applicationId) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 2 || !applicationId) return null;
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  var idColumn = header.indexOf('申請編號');
+  if (idColumn < 0) return null;
+  var matched = values.slice(1).filter(function (row) {
+    return String(row[idColumn]) === String(applicationId);
+  })[0];
+  if (!matched) return null;
+
+  var response = { _timestamp: matched[header.indexOf('時間')], _flag: matched[header.indexOf('資料檢查')] };
+  (fields || []).forEach(function (field) {
+    var column = header.indexOf(field[1]);
+    response[field[0]] = column < 0 ? '' : matched[column];
+  });
+  return response;
+}
+
+function scheduleRow_(entry) {
+  return SCHEDULE_COLUMNS.map(function (field) { return sheetSafeValue_(entry[field[0]]); });
+}
+
+/** Prevents concurrent web-app submissions or admin edits from overwriting sheet rewrites. */
+function withDataLock_(callback) {
+  if (typeof LockService === 'undefined') return callback();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    return callback();
+  } finally {
+    try {
+      if (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.flush) SpreadsheetApp.flush();
+    } finally {
+      lock.releaseLock();
     }
   }
+}
 
-  sheet.appendRow(buildResponseRow(fields, get, timestamp, flag));
+function appendSchedule_(ss, entry) {
+  return withDataLock_(function () {
+    var sheet = ss.getSheetByName(SHEET_SCHEDULE) || ss.insertSheet(SHEET_SCHEDULE);
+    var header = SCHEDULE_COLUMNS.map(function (field) { return field[1]; });
+    var actualHeader = ensureHeader_(sheet, header);
+    var existingValues = sheet.getDataRange().getValues();
+    var idColumn = actualHeader.indexOf('申請編號');
+    if (idColumn >= 0 && existingValues.slice(1).some(function (row) {
+      return String(row[idColumn]) === String(entry.id);
+    })) return false;
+    var newRow = scheduleRow_(entry);
+    while (newRow.length < actualHeader.length) newRow.push('');
+    sheet.appendRow(newRow);
+
+    var values = sheet.getDataRange().getValues();
+    var indexByLabel = {};
+    actualHeader.forEach(function (label, index) { indexByLabel[label] = index; });
+    var rows = values.slice(1).sort(function (a, b) {
+      function entryFor(row) {
+        var out = {};
+        SCHEDULE_COLUMNS.forEach(function (field) { out[field[0]] = row[indexByLabel[field[1]]]; });
+        return out;
+      }
+      return compareScheduleEntries(entryFor(a), entryFor(b));
+    });
+    var table = [actualHeader].concat(rows);
+    sheet.clear();
+    sheet.getRange(1, 1, table.length, actualHeader.length).setValues(table);
+    return true;
+  });
+}
+
+function appendScheduleBestEffort_(ss, entry) {
+  try {
+    appendSchedule_(ss, entry);
+    return true;
+  } catch (error) {
+    try { logError_(ss, 'schedule', error); } catch (logErr) { /* best effort */ }
+    return false;
+  }
+}
+
+function applicationId_(timestamp, type, clientId) {
+  var supplied = String(clientId || '').trim().replace(/[^A-Za-z0-9._-]+/g, '').slice(0, 100);
+  if (supplied) return type + '-' + supplied;
+  if (typeof Utilities !== 'undefined' && Utilities.getUuid) return Utilities.getUuid();
+  return type + '-' + timestamp.getTime();
 }
 
 function sendNotifyEmail_(settings, type, fields, get, flag) {
@@ -149,9 +305,9 @@ function handlePost_(ss, e, timestamp) {
   var parameter = (e && e.parameter) || {};
   var parameters = (e && e.parameters) || {};
 
-  // Check if the type is present but unrecognised (not 'workexchange' or 'accommodation').
+  // Check if the type is present but unrecognised.
   var typeValue = String(parameter.type || '').trim();
-  if (typeValue && typeValue !== 'workexchange' && typeValue !== 'accommodation') {
+  if (typeValue && ['workexchange', 'accommodation', 'services'].indexOf(typeValue) < 0) {
     try {
       logError_(ss, 'unknown type', typeValue);
     } catch (logErr) {
@@ -159,15 +315,54 @@ function handlePost_(ss, e, timestamp) {
     }
   }
 
-  var type = parameter.type === 'workexchange' ? 'workexchange' : 'accommodation';
-  var fields = type === 'workexchange' ? WORK_FIELDS : ACCOM_FIELDS;
-  var sheetName = type === 'workexchange' ? SHEET_WORK : SHEET_STAY;
-
-  var get = function (key) { return joinMultiValue(parameters, parameter, key); };
+  var type = parameter.type === 'workexchange' ? 'workexchange'
+    : (parameter.type === 'services' ? 'services' : 'accommodation');
+  var fields = type === 'workexchange' ? WORK_FIELDS : (type === 'services' ? SERVICE_FIELDS : ACCOM_FIELDS);
+  var sheetName = type === 'workexchange' ? SHEET_WORK : (type === 'services' ? SHEET_SERVICES : SHEET_STAY);
+  var overrides = {};
+  var get = function (key) {
+    return overrides.hasOwnProperty(key) ? overrides[key] : joinMultiValue(parameters, parameter, key);
+  };
+  overrides.application_id = applicationId_(timestamp, type, parameter.application_id);
+  var applicantPhotoUrl = '';
+  var responseRecorded = false;
 
   try {
     var flag = checkSuspicious(get);
-    appendResponse_(ss, sheetName, fields, get, timestamp, flag);
+    var scheduleEntry = buildScheduleEntry(type, get, timestamp, flag, overrides.application_id);
+    function scheduleFromStoredResponse_(stored) {
+      var storedGet = function (key) {
+        return stored && stored.hasOwnProperty(key) ? stored[key] : get(key);
+      };
+      return buildScheduleEntry(type, storedGet, (stored && stored._timestamp) || timestamp,
+        (stored && stored._flag) || flag, overrides.application_id);
+    }
+
+    // A readable fetch may be retried after a connection interruption. Reuse the
+    // client ID so the same application cannot create duplicate rows or photos.
+    var existingResponse = readResponseApplication_(ss, sheetName, fields, overrides.application_id);
+    if (existingResponse) {
+      appendScheduleBestEffort_(ss, scheduleFromStoredResponse_(existingResponse));
+      return { ok: true, message: '申請已送出 / Application received', duplicate: true };
+    }
+
+    if (type === 'workexchange') {
+      applicantPhotoUrl = storeApplicantPhoto_(parameter);
+      overrides.photo_url = applicantPhotoUrl;
+      scheduleEntry = buildScheduleEntry(type, get, timestamp, flag, overrides.application_id);
+    }
+    responseRecorded = appendResponse_(ss, sheetName, fields, get, timestamp, flag);
+    if (!responseRecorded) {
+      if (applicantPhotoUrl) trashPhotoFile_(ss, applicantPhotoUrl);
+      appendScheduleBestEffort_(ss, scheduleFromStoredResponse_(
+        readResponseApplication_(ss, sheetName, fields, overrides.application_id)
+      ));
+      return { ok: true, message: '申請已送出 / Application received', duplicate: true };
+    }
+
+    // The response row is the durable source of truth. A temporary schedule-sort
+    // error is logged but must not tell the visitor to retry and duplicate it.
+    appendScheduleBestEffort_(ss, scheduleEntry);
 
     // Email is best effort. A quota error must never lose the recorded row.
     try {
@@ -178,6 +373,7 @@ function handlePost_(ss, e, timestamp) {
 
     return { ok: true, message: '申請已送出 / Application received' };
   } catch (error) {
+    if (applicantPhotoUrl && !responseRecorded) trashPhotoFile_(ss, applicantPhotoUrl);
     // Log the error before returning, but swallow any failure of the error log itself.
     try {
       logError_(ss, 'doPost', error);
@@ -288,11 +484,25 @@ function photoUrlFor_(fileId) {
 
 function fileIdFromUrl_(url) {
   var value = String(url || '');
+  function validId(raw) {
+    try {
+      var decoded = decodeURIComponent(String(raw || ''));
+      return /^[A-Za-z0-9_-]+$/.test(decoded) ? decoded : null;
+    } catch (error) {
+      return null;
+    }
+  }
   var cdn = value.indexOf(PHOTO_CDN_PREFIX);
-  if (cdn === 0) return value.slice(PHOTO_CDN_PREFIX.length).split('=')[0] || null;
+  if (cdn === 0) return validId(value.slice(PHOTO_CDN_PREFIX.length).split('=')[0]);
 
   var proxy = value.match(/[?&]img=([^&]+)/);
-  if (proxy) return proxy[1];
+  if (proxy) return validId(proxy[1]);
+
+  var drivePrefix = 'https://drive.google.com/open?';
+  if (value.indexOf(drivePrefix) === 0) {
+    var drive = value.slice(drivePrefix.length).match(/(?:^|&)id=([^&#]+)/);
+    if (drive) return validId(drive[1]);
+  }
 
   return null;
 }
@@ -340,6 +550,7 @@ var ROOM_COLUMNS = [
   'name', 'name_en', 'description', 'description_en',
   'price', 'unit', 'unit_en', 'note', 'note_en', 'photos'
 ];
+var WORK_ROOM_COLUMNS = ['name', 'name_en', 'description', 'description_en', 'photos'];
 var LIST_COLUMNS = ['list', 'order', 'text_zh', 'text_en'];
 
 function sheetOrCreate_(ss, name, header) {
@@ -391,6 +602,20 @@ function writeRooms_(ss, rooms) {
   sheet.getRange(1, 1, table.length, ROOM_COLUMNS.length).setValues(table);
 }
 
+function writeWorkRooms_(ss, rooms) {
+  var sheet = sheetOrCreate_(ss, SHEET_WORK_ROOMS, null);
+  sheet.clear();
+
+  var table = [WORK_ROOM_COLUMNS.slice()];
+  (rooms || []).forEach(function (room) {
+    table.push(WORK_ROOM_COLUMNS.map(function (column) {
+      var value = room[column];
+      return value === undefined || value === null ? '' : value;
+    }));
+  });
+  sheet.getRange(1, 1, table.length, WORK_ROOM_COLUMNS.length).setValues(table);
+}
+
 function writeLists_(ss, lists) {
   var sheet = sheetOrCreate_(ss, SHEET_LISTS, null);
   sheet.clear();
@@ -415,8 +640,33 @@ function saveContent(token, payload) {
 
   if (payload && payload.settings) upsertSettings_(ss, payload.settings);
   if (payload && payload.rooms) writeRooms_(ss, payload.rooms);
+  if (payload && payload.work_rooms) writeWorkRooms_(ss, payload.work_rooms);
 
   return { ok: true };
+}
+
+var SCHEDULE_STATUSES = ['新申請', '已聯絡', '已確認', '已取消'];
+
+function updateScheduleStatus(token, applicationId, status) {
+  assertAuthorized_(token);
+  if (SCHEDULE_STATUSES.indexOf(status) < 0) throw new Error('未知的狀態 Unknown status: ' + status);
+
+  return withDataLock_(function () {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET_SCHEDULE);
+    if (!sheet || sheet.getLastRow() < 2) throw new Error('找不到申請 Application not found');
+
+    var values = sheet.getDataRange().getValues();
+    var idColumn = values[0].indexOf('申請編號');
+    var statusColumn = values[0].indexOf('狀態');
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][idColumn]) === String(applicationId)) {
+        sheet.getRange(i + 1, statusColumn + 1, 1, 1).setValue(status);
+        return { ok: true, id: applicationId, status: status };
+      }
+    }
+    throw new Error('找不到申請 Application not found');
+  });
 }
 
 function saveList(token, listName, items) {
@@ -466,8 +716,13 @@ function roomIndexForSection_(section) {
   return room ? Number(room[1]) : null;
 }
 
+function workRoomIndexForSection_(section) {
+  var room = String(section || '').match(/^work-room-(\d+)$/);
+  return room ? Number(room[1]) : null;
+}
+
 function assertKnownSection_(section) {
-  if (settingsKeyForSection_(section) === null && roomIndexForSection_(section) === null) {
+  if (settingsKeyForSection_(section) === null && roomIndexForSection_(section) === null && workRoomIndexForSection_(section) === null) {
     throw new Error('未知的區塊 Unknown section: ' + section);
   }
 }
@@ -487,6 +742,11 @@ function assertSectionExists_(ss, section) {
       throw new Error('房型不存在 Room not found: ' + section);
     }
   }
+  var workRoomIndex = workRoomIndexForSection_(section);
+  if (workRoomIndex !== null) {
+    var workRooms = readWorkRooms_(ss);
+    if (!workRooms[workRoomIndex]) throw new Error('換宿房型不存在 Work room not found: ' + section);
+  }
 }
 
 function readPhotoUrls_(ss, section) {
@@ -495,8 +755,9 @@ function readPhotoUrls_(ss, section) {
   var settingsKey = settingsKeyForSection_(section);
   if (settingsKey) return splitUrls(readSettings_(ss)[settingsKey]);
 
-  var rooms = readRooms_(ss);
-  var room = rooms[roomIndexForSection_(section)];
+  var workRoomIndex = workRoomIndexForSection_(section);
+  var rooms = workRoomIndex === null ? readRooms_(ss) : readWorkRooms_(ss);
+  var room = rooms[workRoomIndex === null ? roomIndexForSection_(section) : workRoomIndex];
   return room ? splitUrls(room.photos) : [];
 }
 
@@ -511,11 +772,13 @@ function writePhotoUrls_(ss, section, urls) {
     return;
   }
 
-  var rooms = readRooms_(ss);
-  var index = roomIndexForSection_(section);
+  var workRoomIndex = workRoomIndexForSection_(section);
+  var rooms = workRoomIndex === null ? readRooms_(ss) : readWorkRooms_(ss);
+  var index = workRoomIndex === null ? roomIndexForSection_(section) : workRoomIndex;
   if (!rooms[index]) throw new Error('房型不存在 Room not found: ' + section);
   rooms[index].photos = joinUrls(urls);
-  writeRooms_(ss, rooms);
+  if (workRoomIndex === null) writeRooms_(ss, rooms);
+  else writeWorkRooms_(ss, rooms);
 }
 
 /** Gets, or creates, the section's subfolder beneath the configured photo root. */
@@ -526,6 +789,23 @@ function folderForSection_(section) {
   var root = DriveApp.getFolderById(rootFolderId);
   var existing = root.getFoldersByName(section);
   return existing.hasNext() ? existing.next() : root.createFolder(section);
+}
+
+var MAX_APPLICANT_PHOTO_BASE64 = 3 * 1024 * 1024;
+
+function storeApplicantPhoto_(parameter) {
+  var base64 = String((parameter && parameter.photo_base64) || '');
+  var mimeType = String((parameter && parameter.photo_mime) || '').toLowerCase();
+  if (!base64) throw new Error('請上傳本人照片');
+  if (base64.length > MAX_APPLICANT_PHOTO_BASE64) throw new Error('本人照片過大');
+  if (['image/jpeg', 'image/png', 'image/webp'].indexOf(mimeType) < 0) throw new Error('不支援的圖片格式');
+
+  var rawName = String((parameter && parameter.photo_name) || 'applicant.jpg');
+  var filename = rawName.replace(/[^A-Za-z0-9._-]+/g, '_').slice(-120) || 'applicant.jpg';
+  var bytes = Utilities.base64Decode(base64);
+  var blob = Utilities.newBlob(bytes, mimeType, filename);
+  var file = folderForSection_('applicant-photos').createFile(blob);
+  return 'https://drive.google.com/open?id=' + file.getId();
 }
 
 function uploadPhoto(token, section, filename, base64, mimeType) {
@@ -606,29 +886,43 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     SHEET_SETTINGS: SHEET_SETTINGS,
     SHEET_ROOMS: SHEET_ROOMS,
+    SHEET_WORK_ROOMS: SHEET_WORK_ROOMS,
     SHEET_LISTS: SHEET_LISTS,
     SHEET_STAY: SHEET_STAY,
     SHEET_WORK: SHEET_WORK,
+    SHEET_SERVICES: SHEET_SERVICES,
+    SHEET_SCHEDULE: SHEET_SCHEDULE,
     SHEET_ERRORS: SHEET_ERRORS,
     PRIVATE_SETTINGS_KEYS: PRIVATE_SETTINGS_KEYS,
     ROOM_COLUMNS: ROOM_COLUMNS,
+    WORK_ROOM_COLUMNS: WORK_ROOM_COLUMNS,
+    SCHEDULE_COLUMNS: SCHEDULE_COLUMNS,
+    MAX_APPLICANT_PHOTO_BASE64: MAX_APPLICANT_PHOTO_BASE64,
     LIST_COLUMNS: LIST_COLUMNS,
     readSettings_: readSettings_,
     readTableRows_: readTableRows_,
     readRooms_: readRooms_,
+    readWorkRooms_: readWorkRooms_,
     readListRows_: readListRows_,
+    readSchedule_: readSchedule_,
     buildContentPayload_: buildContentPayload_,
     appendResponse_: appendResponse_,
+    responseApplicationExists_: responseApplicationExists_,
+    readResponseApplication_: readResponseApplication_,
+    withDataLock_: withDataLock_,
+    appendSchedule_: appendSchedule_,
     sendNotifyEmail_: sendNotifyEmail_,
     logError_: logError_,
     handlePost_: handlePost_,
     sheetOrCreate_: sheetOrCreate_,
     upsertSettings_: upsertSettings_,
     writeRooms_: writeRooms_,
+    writeWorkRooms_: writeWorkRooms_,
     writeLists_: writeLists_,
     loadAdminContent: loadAdminContent,
     saveContent: saveContent,
     saveList: saveList,
+    updateScheduleStatus: updateScheduleStatus,
     verifyPasscode: verifyPasscode,
     assertAuthorized_: assertAuthorized_,
     revokeToken: revokeToken,
@@ -637,10 +931,12 @@ if (typeof module !== 'undefined' && module.exports) {
     isInsidePhotoRoot_: isInsidePhotoRoot_,
     settingsKeyForSection_: settingsKeyForSection_,
     roomIndexForSection_: roomIndexForSection_,
+    workRoomIndexForSection_: workRoomIndexForSection_,
     assertSectionExists_: assertSectionExists_,
     readPhotoUrls_: readPhotoUrls_,
     writePhotoUrls_: writePhotoUrls_,
     folderForSection_: folderForSection_,
+    storeApplicantPhoto_: storeApplicantPhoto_,
     uploadPhoto: uploadPhoto,
     deletePhoto: deletePhoto,
     reorderPhotos: reorderPhotos,

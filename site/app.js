@@ -94,15 +94,21 @@ var Rainbowstar = (function () {
     setType('accommodation');
     attachSubmit('formStay', 'msgStay');
     attachSubmit('formWork', 'msgWork');
+    attachSubmit('formServices', 'msgServices');
+    initDateRangePickers();
 
     var stayButton = document.getElementById('seg-stay');
     if (stayButton) stayButton.onclick = function () { setType('accommodation'); };
     var workButton = document.getElementById('seg-work');
     if (workButton) workButton.onclick = function () { setType('workexchange'); };
+    var servicesButton = document.getElementById('seg-services');
+    if (servicesButton) servicesButton.onclick = function () { setType('services'); };
 
-    Array.prototype.forEach.call(document.querySelectorAll('input[name="need_addon"]'), function (radio) {
-      radio.onchange = function () { toggleAddon(radio.value === 'YES'); };
+    var servicesForm = document.getElementById('formServices');
+    Array.prototype.forEach.call(document.querySelectorAll('#formServices input[name="services"]'), function (checkbox) {
+      checkbox.onchange = function () { toggleServiceDetails(servicesForm); };
     });
+    toggleServiceDetails(servicesForm);
   }
 
   var state = { data: null, lang: 'zh' };
@@ -167,6 +173,34 @@ var Rainbowstar = (function () {
     return settingValue(settings, key, UNTRANSLATABLE_CONTENT[key] ? 'zh' : lang);
   }
 
+  var PUBLIC_SECTIONS = {
+    top: 'show_home',
+    about: 'show_about',
+    stay: 'show_stay',
+    work: 'show_work',
+    nearby: 'show_nearby',
+    apply: 'show_apply',
+    contact: 'show_contact'
+  };
+
+  function sectionEnabled(settings, key) {
+    var value = settings && settings[key];
+    if (value === undefined || value === null || String(value).trim() === '') return true;
+    return ['false', '0', 'no', 'off'].indexOf(String(value).trim().toLowerCase()) < 0;
+  }
+
+  function applySectionVisibility(settings) {
+    Object.keys(PUBLIC_SECTIONS).forEach(function (id) {
+      var visible = sectionEnabled(settings, PUBLIC_SECTIONS[id]);
+      var section = document.getElementById(id);
+      if (section) section.style.display = visible ? '' : 'none';
+      if (id === 'top') return;  // keep the site-name links visible even when the hero is hidden
+      Array.prototype.forEach.call(document.querySelectorAll('[href="#' + id + '"],[data-jump="' + id + '"]'), function (link) {
+        link.style.display = visible ? '' : 'none';
+      });
+    });
+  }
+
   function applyContent(data, lang) {
     state.data = data;
     var settings = (data && data.settings) || {};
@@ -188,7 +222,9 @@ var Rainbowstar = (function () {
 
     applyHeroPhotos(splitUrls(settings.hero_photos || settings.hero_image));
     applySceneryPhotos(settings);
+    applySectionVisibility(settings);
     renderRooms((data && data.rooms) || [], lang);
+    renderWorkRooms((data && data.work_rooms) || [], lang);
     renderAllLists(data, lang);
   }
 
@@ -312,6 +348,9 @@ var Rainbowstar = (function () {
 
     // Re-apply data-driven content, which applyLang's blanket sweep just overwrote.
     applyContent(state.data, lang);
+    Array.prototype.forEach.call(document.querySelectorAll('.rb-date-range'), function (picker) {
+      if (picker.__refreshLanguage) picker.__refreshLanguage();
+    });
   }
 
   function toggleLang() {
@@ -386,6 +425,10 @@ var Rainbowstar = (function () {
     return (rooms && rooms.length) ? rooms : DEFAULT_ROOMS;
   }
 
+  function workRoomsToRender(rooms) {
+    return (rooms && rooms.length) ? rooms : [];
+  }
+
   function roomPrice(room) {
     var price = room.price;
     return (price === undefined || price === '' || price === 0 || price === '0') ? '—' : price;
@@ -404,7 +447,7 @@ var Rainbowstar = (function () {
     var base = 'position:absolute;inset:0;transition:opacity .35s ease';
     if (slide.url) {
       el.setAttribute('style', base + ';background:#eee;background-image:url("' +
-        String(slide.url).replace(/"/g, '%22') + '");background-size:cover;background-position:center');
+        String(slide.url).replace(/"/g, '%22') + '");background-size:contain;background-position:center;background-repeat:no-repeat');
     } else {
       el.setAttribute('style', base + ';background:' + slide.gradient +
         ';display:flex;align-items:center;justify-content:center;color:#a7a08d;font-size:12.5px;font-weight:600');
@@ -565,7 +608,7 @@ var Rainbowstar = (function () {
     card.setAttribute('style', 'background:#fff;border:1px solid #ece3d3;border-radius:20px;' +
       'box-shadow:0 10px 30px rgba(60,50,30,.06);display:flex;flex-direction:column;overflow:hidden');
     card.innerHTML =
-      '<div class="rphoto" style="height:190px"></div><div style="height:5px;background:' + accent + '"></div>' +
+      '<div class="rphoto" style="aspect-ratio:1/1"></div><div style="height:5px;background:' + accent + '"></div>' +
       '<div style="padding:24px 24px 26px;display:flex;flex-direction:column;flex:1">' +
       '<div class="rn" style="font-family:\'Newsreader\',\'Noto Serif TC\',serif;font-weight:600;color:#2f2b22;font-size:21px;margin-bottom:8px"></div>' +
       '<div class="rd" style="color:#726b5c;font-size:14.5px;line-height:1.6;flex:1;margin-bottom:16px;white-space:pre-line"></div>' +
@@ -592,7 +635,7 @@ var Rainbowstar = (function () {
     wrap.setAttribute('style', 'display:flex;flex-wrap:wrap;background:#fff;border:1px solid #ece3d3;' +
       'border-radius:26px;overflow:hidden;box-shadow:0 22px 50px rgba(60,50,30,.10);max-width:1000px;margin:0 auto');
     wrap.innerHTML =
-      '<div class="rphoto" style="flex:1 1 480px;min-width:300px;min-height:380px"></div>' +
+      '<div class="rphoto" style="flex:1 1 480px;min-width:300px;aspect-ratio:1/1"></div>' +
       '<div style="flex:1 1 360px;min-width:280px;padding:clamp(28px,4vw,48px);display:flex;flex-direction:column;justify-content:center">' +
       '<div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">' +
       '<span style="width:22px;height:2px;background:' + accent + ';border-radius:2px"></span>' +
@@ -636,6 +679,43 @@ var Rainbowstar = (function () {
     }
   }
 
+  function buildWorkRoomCard(room, index, lang) {
+    var accent = ROOM_ACCENTS[(index + 2) % ROOM_ACCENTS.length];
+    var name = pickRow(room, 'name', lang) || '';
+    var description = pickRow(room, 'description', lang) || '';
+    var card = document.createElement('div');
+    card.setAttribute('style', 'background:#fff;border:1px solid #ece3d3;border-radius:20px;' +
+      'box-shadow:0 10px 30px rgba(60,50,30,.06);display:flex;flex-direction:column;overflow:hidden');
+    card.innerHTML = '<div class="rphoto" style="aspect-ratio:1/1"></div><div style="height:5px;background:' + accent + '"></div>' +
+      '<div style="padding:24px 24px 26px"><div class="rn" style="font-family:\'Newsreader\',\'Noto Serif TC\',serif;' +
+      'font-weight:600;color:#2f2b22;font-size:21px;margin-bottom:8px"></div>' +
+      '<div class="rd" style="color:#726b5c;font-size:14.5px;line-height:1.65;white-space:pre-line"></div></div>';
+    card.querySelector('.rn').textContent = name;
+    card.querySelector('.rd').textContent = description;
+    setupPhotoHost(card.querySelector('.rphoto'), roomSlides(room), { name: name, description: description });
+    return card;
+  }
+
+  function renderWorkRooms(rooms, lang) {
+    var host = document.getElementById('work-rooms-list');
+    if (!host) return;
+    var list = workRoomsToRender(rooms);
+    host.innerHTML = '';
+    if (!list.length) {
+      var empty = document.createElement('div');
+      empty.setAttribute('style', 'border:1px dashed #dccfae;background:#fffaf0;border-radius:18px;padding:25px;' +
+        'text-align:center;color:#8a7650;font-size:14px;line-height:1.65');
+      empty.setAttribute('data-zh', '換宿房間資料整理中；屋主之後可直接從後台新增名稱、簡介與照片。');
+      empty.setAttribute('data-en', 'Work-exchange room details are being prepared. The host can add names, descriptions and photos from the admin panel.');
+      empty.textContent = contentValue((state.data && state.data.settings) || {}, 'work_rooms_empty', lang) ||
+        (lang === 'en' ? empty.getAttribute('data-en') : empty.getAttribute('data-zh'));
+      host.appendChild(empty);
+      return;
+    }
+    host.setAttribute('style', 'margin-top:26px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,340px));gap:22px');
+    list.forEach(function (room, index) { host.appendChild(buildWorkRoomCard(room, index, lang)); });
+  }
+
   function applyHeroPhotos(urls) {
     var hero = document.getElementById('heroPhoto');
     if (!hero) return;
@@ -672,8 +752,8 @@ var Rainbowstar = (function () {
 
       var urls = splitUrls(settings['scenery' + n + '_photos'] || settings['scenery' + n]);
       var label = tile.querySelector('span[data-zh]');
-      var labelZh = label ? label.getAttribute('data-zh') : '';
-      var labelEn = label ? label.getAttribute('data-en') : '';
+      var labelZh = contentValue(settings, 'scenery' + n + '_label', 'zh') || (label ? label.getAttribute('data-zh') : '');
+      var labelEn = contentValue(settings, 'scenery' + n + '_label', 'en') || (label ? label.getAttribute('data-en') : '');
 
       tile.style.cursor = 'zoom-in';
       addEnlargeHint(tile);
@@ -695,6 +775,130 @@ var Rainbowstar = (function () {
             });
         openLightbox(slides, 0, { name: state.lang === 'en' ? labelEn : labelZh });
       };
+    });
+  }
+
+  function displayDate(value) {
+    if (!value) return '';
+    var parts = value.split('-');
+    return parts[2] + '/' + parts[1] + '/' + parts[0];
+  }
+
+  function initDateRangePicker(root) {
+    var startName = root.getAttribute('data-start');
+    var endName = root.getAttribute('data-end');
+    var inclusive = root.getAttribute('data-inclusive') === 'true';
+    var startInput = root.querySelector('[name="' + startName + '"]');
+    var endInput = root.querySelector('[name="' + endName + '"]');
+    var startButton = root.querySelector('.rb-date-start');
+    var endButton = root.querySelector('.rb-date-end');
+    var summary = root.querySelector('.rb-date-summary');
+    var panel = root.querySelector('.rb-calendar-panel');
+    if (!startInput || !endInput || !startButton || !endButton || !panel) return;
+
+    var today = new Date();
+    today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    var view = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    function monthTitle(year, month) {
+      return state.lang === 'en'
+        ? new Date(year, month, 1).toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' })
+        : year + ' 年 ' + (month + 1) + ' 月';
+    }
+
+    function paintSummary() {
+      startButton.querySelector('strong').textContent = startInput.value ? displayDate(startInput.value)
+        : (state.lang === 'en' ? 'Choose date' : '選擇日期');
+      endButton.querySelector('strong').textContent = endInput.value ? displayDate(endInput.value)
+        : (state.lang === 'en' ? 'Choose date' : '選擇日期');
+      var length = rangeLength(startInput.value, endInput.value, inclusive);
+      if (summary) {
+        summary.textContent = length === null ? '' : (state.lang === 'en'
+          ? length + (inclusive ? (length === 1 ? ' day' : ' days') : (length === 1 ? ' night' : ' nights'))
+          : '共 ' + length + (inclusive ? ' 天' : ' 晚'));
+      }
+    }
+
+    function monthMarkup(year, month) {
+      var weekdays = state.lang === 'en' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['一', '二', '三', '四', '五', '六', '日'];
+      var html = '<div class="rb-calendar-month"><div class="rb-calendar-title">' + monthTitle(year, month) + '</div>' +
+        '<div class="rb-calendar-week">' + weekdays.map(function (day) { return '<span>' + day + '</span>'; }).join('') + '</div>' +
+        '<div class="rb-calendar-grid">';
+      calendarDays(year, month).forEach(function (day) {
+        var date = dateFromIso(day.iso);
+        var disabled = date < today;
+        var selected = day.iso === startInput.value || day.iso === endInput.value;
+        var inRange = startInput.value && endInput.value && day.iso > startInput.value && day.iso < endInput.value;
+        html += '<button type="button" data-calendar-date="' + day.iso + '"' + (disabled ? ' disabled' : '') +
+          ' class="' + (!day.inMonth ? 'is-outside ' : '') + (selected ? 'is-selected ' : '') + (inRange ? 'is-range ' : '') +
+          '">' + day.day + '</button>';
+      });
+      return html + '</div></div>';
+    }
+
+    function renderCalendar() {
+      var next = new Date(view.getFullYear(), view.getMonth() + 1, 1);
+      panel.innerHTML = '<div class="rb-calendar-nav"><button type="button" data-calendar-prev aria-label="previous month">‹</button>' +
+        '<span>' + (state.lang === 'en' ? 'Select a date range' : '選擇日期區間') + '</span>' +
+        '<button type="button" data-calendar-next aria-label="next month">›</button></div>' +
+        '<div class="rb-calendar-months">' + monthMarkup(view.getFullYear(), view.getMonth()) +
+        monthMarkup(next.getFullYear(), next.getMonth()) + '</div>';
+      panel.querySelector('[data-calendar-prev]').onclick = function (event) {
+        event.stopPropagation();
+        var previous = new Date(view.getFullYear(), view.getMonth() - 1, 1);
+        if (previous >= new Date(today.getFullYear(), today.getMonth(), 1)) view = previous;
+        renderCalendar();
+      };
+      panel.querySelector('[data-calendar-next]').onclick = function (event) {
+        event.stopPropagation();
+        view = new Date(view.getFullYear(), view.getMonth() + 1, 1);
+        renderCalendar();
+      };
+      Array.prototype.forEach.call(panel.querySelectorAll('[data-calendar-date]'), function (button) {
+        button.onclick = function (event) {
+          event.stopPropagation();
+          var chosen = button.getAttribute('data-calendar-date');
+          if (!startInput.value || endInput.value || chosen < startInput.value) {
+            startInput.value = chosen;
+            endInput.value = '';
+          } else if (chosen > startInput.value || (inclusive && chosen === startInput.value)) {
+            endInput.value = chosen;
+            panel.style.display = 'none';
+          }
+          paintSummary();
+          renderCalendar();
+        };
+      });
+    }
+
+    function openPanel() {
+      panel.style.display = 'block';
+      renderCalendar();
+    }
+    startButton.onclick = openPanel;
+    endButton.onclick = openPanel;
+    document.addEventListener('click', function (event) {
+      if (!root.contains(event.target)) panel.style.display = 'none';
+    });
+    root.__resetDateRange = function () {
+      startInput.value = '';
+      endInput.value = '';
+      panel.style.display = 'none';
+      paintSummary();
+      renderCalendar();
+    };
+    root.__refreshLanguage = function () { paintSummary(); renderCalendar(); };
+    paintSummary();
+    renderCalendar();
+  }
+
+  function initDateRangePickers() {
+    Array.prototype.forEach.call(document.querySelectorAll('.rb-date-range'), initDateRangePicker);
+  }
+
+  function resetDateRangePickers(form) {
+    Array.prototype.forEach.call(form.querySelectorAll('.rb-date-range'), function (picker) {
+      if (picker.__resetDateRange) picker.__resetDateRange();
     });
   }
 
@@ -720,6 +924,45 @@ var Rainbowstar = (function () {
   }
   function isEmail(value) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim()); }
   function isUrl(value) { return /^https?:\/\/.+\..+/i.test(String(value || '').trim()); }
+
+  function dateFromIso(value) {
+    var parts = String(value || '').split('-').map(Number);
+    return parts.length === 3 && parts[0] && parts[1] && parts[2]
+      ? new Date(parts[0], parts[1] - 1, parts[2]) : null;
+  }
+
+  function isoDate(date) {
+    function pad(value) { return value < 10 ? '0' + value : String(value); }
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+  }
+
+  function rangeLength(start, end, inclusive) {
+    var first = dateFromIso(start);
+    var last = dateFromIso(end);
+    if (!first || !last) return null;
+    var days = Math.round((last.getTime() - first.getTime()) / 86400000);
+    if (days < 0) return null;
+    return inclusive ? days + 1 : days;
+  }
+
+  function calendarDays(year, month) {
+    var first = new Date(year, month, 1);
+    var mondayOffset = (first.getDay() + 6) % 7;
+    var cursor = new Date(year, month, 1 - mondayOffset);
+    var days = [];
+    for (var i = 0; i < 42; i++) {
+      days.push({ iso: isoDate(cursor), day: cursor.getDate(), inMonth: cursor.getMonth() === month });
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+    }
+    return days;
+  }
+
+  function checkedValues(form, name) {
+    if (!form.querySelectorAll) return [];
+    return Array.prototype.map.call(form.querySelectorAll('[name="' + name + '"]:checked'), function (field) {
+      return field.value;
+    });
+  }
 
   function validate(form) {
     var errors = [];
@@ -767,6 +1010,34 @@ var Rainbowstar = (function () {
     if (hasField(form, 'emergency_phone') && digitsOnly(fieldValue(form, 'emergency_phone')).length < 6) bad('emergency_phone', '緊急連絡電話請填寫正確', 'Please enter a valid emergency phone');
     if (hasField(form, 'emergency_name') && looksFake(fieldValue(form, 'emergency_name'))) bad('emergency_name', '緊急連絡人請填寫正確', 'Please enter a valid emergency contact');
     if (hasField(form, 'photo_url') && !isUrl(fieldValue(form, 'photo_url'))) bad('photo_url', '照片連結請填有效網址（http 開頭）', 'Please enter a valid photo URL (starting with http)');
+    if (hasField(form, 'applicant_photo')) {
+      var photoInput = form.querySelector('[name="applicant_photo"]');
+      if (!photoInput.files || !photoInput.files.length) bad('applicant_photo', '請上傳一張本人正面照片', 'Please upload one clear photo of yourself');
+    }
+
+    if (hasField(form, 'services')) {
+      var services = checkedValues(form, 'services');
+      if (!services.length) bad('services', '請至少選擇一項服務', 'Please choose at least one service');
+      var storage = services.indexOf('寄放行李') >= 0 || services.indexOf('寄放車輛') >= 0;
+      if (storage) {
+        var serviceStart = fieldValue(form, 'service_start');
+        var serviceEnd = fieldValue(form, 'service_end');
+        if (!serviceStart) bad('service_start', '請選擇寄放開始日期', 'Please choose a storage start date');
+        if (!serviceEnd) bad('service_end', '請選擇寄放結束日期', 'Please choose a storage end date');
+        if (serviceStart && serviceEnd && serviceEnd < serviceStart) bad('service_end', '寄放結束日期不可早於開始日期', 'Storage end date cannot be before the start date');
+      }
+      if (services.indexOf('寄放行李') >= 0 && !(parseInt(fieldValue(form, 'luggage_count'), 10) >= 1)) {
+        bad('luggage_count', '請填寫行李件數', 'Please enter the number of luggage items');
+      }
+      if (services.indexOf('寄放車輛') >= 0 && !fieldValue(form, 'vehicle_plate').trim()) {
+        bad('vehicle_plate', '寄放車輛請填寫車牌號碼', 'Please enter the vehicle plate for vehicle storage');
+      }
+      [['接機', 'pickup'], ['送機', 'dropoff'], ['市區接送', 'city']].forEach(function (item) {
+        if (services.indexOf(item[0]) < 0) return;
+        if (!fieldValue(form, item[1] + '_date')) bad(item[1] + '_date', '請填寫' + item[0] + '日期', 'Please enter the service date');
+        if (!fieldValue(form, item[1] + '_time')) bad(item[1] + '_time', '請填寫' + item[0] + '時間', 'Please enter the service time');
+      });
+    }
 
     if (hasField(form, 'age')) {
       var age = parseInt(fieldValue(form, 'age'), 10);
@@ -798,9 +1069,78 @@ var Rainbowstar = (function () {
     return errors;
   }
 
+  var MAX_APPLICANT_PHOTO_BASE64 = 3 * 1024 * 1024;
+  var MAX_APPLICANT_PHOTO_EDGE = 1200;
+
+  function photoPayloadFromDataUrl(dataUrl, originalName) {
+    var match = String(dataUrl || '').match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!match) throw new Error(vmsg('這不是有效的圖片檔', 'This is not a valid image file'));
+    if (match[2].length > MAX_APPLICANT_PHOTO_BASE64) throw new Error(vmsg('照片過大，請換一張較小的照片', 'The photo is too large; please choose a smaller image'));
+    var stem = String(originalName || 'applicant').replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]+/g, '_') || 'applicant';
+    return { base64: match[2], mimeType: 'image/jpeg', filename: stem + '.jpg' };
+  }
+
+  function downscaleApplicantPhoto(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error(vmsg('讀取照片失敗', 'Could not read the photo'))); };
+      reader.onload = function () {
+        var image = new Image();
+        image.onerror = function () { reject(new Error(vmsg('這不是有效的圖片檔', 'This is not a valid image file'))); };
+        image.onload = function () {
+          var scale = Math.min(1, MAX_APPLICANT_PHOTO_EDGE / Math.max(image.width, image.height));
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(image.width * scale);
+          canvas.height = Math.round(image.height * scale);
+          canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+          try {
+            resolve(photoPayloadFromDataUrl(canvas.toDataURL('image/jpeg', 0.82), file.name));
+          } catch (error) { reject(error); }
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setHiddenField(form, name, value) {
+    var field = form.querySelector('[name="' + name + '"]');
+    if (!field) {
+      field = document.createElement('input');
+      field.type = 'hidden';
+      field.name = name;
+      form.appendChild(field);
+    }
+    field.value = value;
+  }
+
+  function prepareApplicantPhoto(form) {
+    var input = form.querySelector('[name="applicant_photo"]');
+    if (!input) return Promise.resolve();
+    if (!input.files || !input.files[0]) return Promise.reject(new Error(vmsg('請上傳本人照片', 'Please upload your photo')));
+    return downscaleApplicantPhoto(input.files[0]).then(function (photo) {
+      setHiddenField(form, 'photo_base64', photo.base64);
+      setHiddenField(form, 'photo_mime', photo.mimeType);
+      setHiddenField(form, 'photo_name', photo.filename);
+    });
+  }
+
+  function applicationIdFor(form) {
+    var field = form.querySelector('[name="application_id"]');
+    if (field && field.value) return field.value;
+    var id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'web-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+    setHiddenField(form, 'application_id', id);
+    return id;
+  }
+
   function buildFormBody(form) {
     if (typeof HTMLFormElement === 'undefined' || !(form instanceof HTMLFormElement)) return new URLSearchParams();
-    return new URLSearchParams(new FormData(form));
+    applicationIdFor(form);
+    var body = new URLSearchParams(new FormData(form));
+    body.delete('applicant_photo');
+    return body;
   }
 
   /**
@@ -886,15 +1226,23 @@ var Rainbowstar = (function () {
       button.disabled = true;
       button.textContent = tx(MESSAGES.sending);
 
-      submitForm(form, config, window.fetch.bind(window)).then(function (result) {
+      prepareApplicantPhoto(form).then(function () {
+        return submitForm(form, config, window.fetch.bind(window));
+      }).then(function (result) {
         if (result.ok) {
           setMessage(message, 'ok', tx(MESSAGES.ok));
           form.reset();
-          if (formId === 'formStay') toggleAddon(false);
+          resetDateRangePickers(form);
+          if (formId === 'formServices') toggleServiceDetails(form);
         } else {
           console.warn('送出失敗：', result.reason);
           setMessage(message, 'err', tx(MESSAGES.err));
         }
+        scrollToEl(message);
+        button.disabled = false;
+        button.textContent = label;
+      }).catch(function (error) {
+        setMessage(message, 'err', String(error.message || error));
         scrollToEl(message);
         button.disabled = false;
         button.textContent = label;
@@ -911,18 +1259,35 @@ var Rainbowstar = (function () {
 
   function setType(type) {
     var stay = type === 'accommodation';
+    var work = type === 'workexchange';
+    var services = type === 'services';
     segmentStyle(document.getElementById('seg-stay'), stay);
-    segmentStyle(document.getElementById('seg-work'), !stay);
+    segmentStyle(document.getElementById('seg-work'), work);
+    segmentStyle(document.getElementById('seg-services'), services);
 
     var stayForm = document.getElementById('formStay');
     var workForm = document.getElementById('formWork');
+    var servicesForm = document.getElementById('formServices');
     if (stayForm) stayForm.style.display = stay ? 'block' : 'none';
-    if (workForm) workForm.style.display = stay ? 'none' : 'block';
+    if (workForm) workForm.style.display = work ? 'block' : 'none';
+    if (servicesForm) servicesForm.style.display = services ? 'block' : 'none';
   }
 
-  function toggleAddon(show) {
-    var details = document.getElementById('addonDetails');
-    if (details) details.style.display = show ? 'block' : 'none';
+  function toggleServiceDetails(form) {
+    if (!form) return;
+    var selected = checkedValues(form, 'services');
+    Array.prototype.forEach.call(form.querySelectorAll('[data-service-detail]'), function (section) {
+      var names = String(section.getAttribute('data-service-detail') || '').split(',');
+      var active = names.some(function (name) { return selected.indexOf(name) >= 0; });
+      section.style.display = active ? 'block' : 'none';
+      Array.prototype.forEach.call(section.querySelectorAll('[name]'), function (field) {
+        field.disabled = !active;
+        if (!active) {
+          if (field.type === 'checkbox' || field.type === 'radio') field.checked = false;
+          else field.value = '';
+        }
+      });
+    });
   }
 
   return {
@@ -935,6 +1300,8 @@ var Rainbowstar = (function () {
     pickRow: pickRow,
     escapeHtml: escapeHtml,
     contentValue: contentValue,
+    sectionEnabled: sectionEnabled,
+    applySectionVisibility: applySectionVisibility,
     applyContent: applyContent,
     loadContent: loadContent,
     DEFAULT_LISTS: DEFAULT_LISTS,
@@ -947,21 +1314,32 @@ var Rainbowstar = (function () {
     toggleMenu: toggleMenu,
     DEFAULT_ROOMS: DEFAULT_ROOMS,
     roomsToRender: roomsToRender,
+    workRoomsToRender: workRoomsToRender,
     collectPhotos: collectPhotos,
     roomPrice: roomPrice,
+    makeSlide: makeSlide,
     buildCarousel: buildCarousel,
     openLightbox: openLightbox,
     closeLightbox: closeLightbox,
     renderRooms: renderRooms,
+    renderWorkRooms: renderWorkRooms,
     applyHeroPhotos: applyHeroPhotos,
     applySceneryPhotos: applySceneryPhotos,
     SUBMIT_MODE: SUBMIT_MODE,
+    rangeLength: rangeLength,
+    calendarDays: calendarDays,
     validate: validate,
+    MAX_APPLICANT_PHOTO_BASE64: MAX_APPLICANT_PHOTO_BASE64,
+    photoPayloadFromDataUrl: photoPayloadFromDataUrl,
+    prepareApplicantPhoto: prepareApplicantPhoto,
+    applicationIdFor: applicationIdFor,
     buildFormBody: buildFormBody,
     submitForm: submitForm,
     attachSubmit: attachSubmit,
     setType: setType,
-    toggleAddon: toggleAddon
+    toggleServiceDetails: toggleServiceDetails,
+    initDateRangePickers: initDateRangePickers,
+    resetDateRangePickers: resetDateRangePickers
   };
 })();
 
